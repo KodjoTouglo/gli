@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{bail, Context as _, Result};
 use vpsguard_core::{Config, Context, ModuleCatalog, State};
+use vpsguard_state::{History, DEFAULT_PATH};
 
 mod lockout;
 mod render;
@@ -53,6 +54,12 @@ enum Command {
     },
     /// List the builtin recipes.
     Recipes,
+    /// Show recent apply/rollback events.
+    History {
+        /// Number of events to show.
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
     /// Internal: watch for confirmation and roll back risky modules on timeout.
     #[command(hide = true)]
     Guard {
@@ -93,11 +100,45 @@ async fn main() -> Result<()> {
             cmd_recipes();
             Ok(())
         }
+        Command::History { limit } => {
+            cmd_history(limit);
+            Ok(())
+        }
         Command::Guard {
             modules,
             timeout,
             commit,
         } => cmd_guard(&cli.config, &modules, timeout, &commit).await,
+    }
+}
+
+/// Open the history store, best-effort: a warning instead of failing the run.
+fn open_history() -> Option<History> {
+    match History::open(DEFAULT_PATH) {
+        Ok(h) => Some(h),
+        Err(e) => {
+            eprintln!("warning: history unavailable: {e}");
+            None
+        }
+    }
+}
+
+fn cmd_history(limit: usize) {
+    let Some(history) = open_history() else {
+        return;
+    };
+    match history.recent(limit) {
+        Ok(events) if events.is_empty() => println!("No history yet."),
+        Ok(events) => {
+            for e in events {
+                let mark = if e.ok { "ok" } else { "x" };
+                println!(
+                    "{}  [{mark}] {:<9} {:<10} {}",
+                    e.timestamp, e.action, e.module, e.summary
+                );
+            }
+        }
+        Err(e) => eprintln!("warning: could not read history: {e}"),
     }
 }
 
@@ -179,16 +220,28 @@ async fn cmd_apply(config_path: &PathBuf, dry_run: bool, yes: bool, no_guard: bo
     }
 
     println!();
+    let history = open_history();
     let mut risky = Vec::new();
     for module in catalog.iter() {
         match module.apply(&ctx, false).await {
             Ok(report) => {
                 render::apply_report(&report);
+                if let Some(h) = &history {
+                    let summary = if report.is_noop() {
+                        "no changes".to_string()
+                    } else {
+                        format!("{} change(s)", report.applied.len())
+                    };
+                    let _ = h.record("apply", module.name(), &summary, true);
+                }
                 if module.lockout_risk() && !report.is_noop() {
                     risky.push(module.name().to_string());
                 }
             }
             Err(e) => {
+                if let Some(h) = &history {
+                    let _ = h.record("apply", module.name(), &e.to_string(), false);
+                }
                 eprintln!("[x] {}: {e}", module.name());
                 eprintln!("    attempting rollback of {}...", module.name());
                 match module.rollback(&ctx).await {
@@ -227,18 +280,32 @@ async fn cmd_audit(config_path: &PathBuf) -> Result<()> {
 
 async fn cmd_rollback(config_path: &PathBuf, only: Option<&str>) -> Result<()> {
     let (ctx, catalog) = load(config_path)?;
+    let history = open_history();
+    let record = |name: &str, ok: bool, detail: &str| {
+        if let Some(h) = &history {
+            let _ = h.record("rollback", name, detail, ok);
+        }
+    };
+
     if let Some(name) = only {
         let module = catalog
             .get(name)
             .ok_or_else(|| color_eyre::eyre::eyre!("unknown module `{name}`"))?;
         module.rollback(&ctx).await?;
+        record(name, true, "rolled back");
         println!("rolled back {name}.");
         return Ok(());
     }
     for module in catalog.iter() {
         match module.rollback(&ctx).await {
-            Ok(()) => println!("rolled back {}.", module.name()),
-            Err(e) => eprintln!("[-] {}: {e}", module.name()),
+            Ok(()) => {
+                record(module.name(), true, "rolled back");
+                println!("rolled back {}.", module.name());
+            }
+            Err(e) => {
+                record(module.name(), false, &e.to_string());
+                eprintln!("[-] {}: {e}", module.name());
+            }
         }
     }
     Ok(())
