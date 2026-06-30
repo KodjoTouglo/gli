@@ -34,6 +34,7 @@ pub struct Config {
     pub docker: DockerConfig,
     pub caddy: CaddyConfig,
     pub system: SystemConfig,
+    pub tailscale: TailscaleConfig,
 }
 
 /// Base system settings (`[system]`): hostname, timezone, swap.
@@ -46,6 +47,18 @@ pub struct SystemConfig {
     pub timezone: Option<String>,
     /// Swap file size in MiB; None or 0 leaves swap unmanaged.
     pub swap_mb: Option<u32>,
+}
+
+/// Tailscale settings (`[tailscale]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct TailscaleConfig {
+    /// Install Tailscale and bring the node up.
+    pub enabled: bool,
+    /// Pre-auth key for non-interactive `tailscale up`.
+    pub auth_key: Option<String>,
+    /// Enable Tailscale SSH on this node.
+    pub ssh: bool,
 }
 
 /// Docker runtime settings (`[docker]`).
