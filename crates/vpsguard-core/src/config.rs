@@ -27,6 +27,26 @@ pub struct Config {
     pub firewall: FirewallConfig,
     /// Managed users, keyed by username (`[users.deploy]`).
     pub users: BTreeMap<String, UserConfig>,
+    pub updates: UpdatesConfig,
+}
+
+/// Automatic update settings (`[updates]`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UpdatesConfig {
+    /// Enable unattended security updates.
+    pub enabled: bool,
+    /// Daily reboot time "HH:MM" when updates require it; None disables reboot.
+    pub auto_reboot: Option<String>,
+}
+
+impl Default for UpdatesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            auto_reboot: None,
+        }
+    }
 }
 
 /// A managed user account (`[users.<name>]`).
