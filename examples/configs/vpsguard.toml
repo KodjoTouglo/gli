@@ -17,3 +17,7 @@ allow = ["80/tcp", "443/tcp"]
 [users.deploy]
 sudo = true
 ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAExampleKeyReplaceMe deploy@vpsguard"]
+
+[updates]
+enabled = true
+auto_reboot = "02:00"

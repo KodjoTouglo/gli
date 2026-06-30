@@ -8,10 +8,12 @@
 mod common;
 mod firewall;
 mod ssh;
+mod updates;
 mod users;
 
 pub use firewall::FirewallModule;
 pub use ssh::SshModule;
+pub use updates::UpdatesModule;
 pub use users::UsersModule;
 
 use vpsguard_core::ModuleCatalog;
@@ -22,5 +24,6 @@ pub fn catalog() -> ModuleCatalog {
         Box::new(SshModule),
         Box::new(FirewallModule),
         Box::new(UsersModule),
+        Box::new(UpdatesModule),
     ])
 }
