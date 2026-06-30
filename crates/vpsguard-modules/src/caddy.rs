@@ -8,12 +8,13 @@
 
 use async_trait::async_trait;
 
+use std::path::Path;
+
 use vpsguard_core::{
-    CaddySite, Category, Change, Context, DistroFamily, Error, Module, Platform, Report, Result,
-    Status,
+    CaddySite, Category, Change, Context, DistroFamily, Module, Platform, Report, Result, Status,
 };
 
-use crate::common::{with_suffix, write};
+use crate::common::with_suffix;
 
 const CADDYFILE: &str = "/etc/caddy/Caddyfile";
 const BACKUP_SUFFIX: &str = ".vpsguard.bak";
@@ -87,11 +88,11 @@ impl Module for CaddyModule {
         }
 
         let want = caddyfile(&ctx.config.caddy.sites);
-        let path = ctx.path(CADDYFILE);
-        if read_or_empty(&path).await? != want {
-            let backup = with_suffix(&path, BACKUP_SUFFIX);
-            write(&backup, &read_or_empty(&path).await?).await?;
-            write(&path, &want).await?;
+        let current = ctx.read_or_empty(CADDYFILE).await?;
+        if current != want {
+            let backup = with_suffix(Path::new(CADDYFILE), BACKUP_SUFFIX);
+            ctx.write(&backup, &current).await?;
+            ctx.write(CADDYFILE, &want).await?;
             report.applied.push(Change::command("write Caddyfile"));
         }
 
@@ -108,11 +109,10 @@ impl Module for CaddyModule {
     }
 
     async fn rollback(&self, ctx: &Context) -> Result<()> {
-        let path = ctx.path(CADDYFILE);
-        let backup = with_suffix(&path, BACKUP_SUFFIX);
-        if let Ok(saved) = tokio::fs::read_to_string(&backup).await {
-            write(&path, &saved).await?;
-            let _ = tokio::fs::remove_file(&backup).await;
+        let backup = with_suffix(Path::new(CADDYFILE), BACKUP_SUFFIX);
+        if let Some(saved) = ctx.read(&backup).await? {
+            ctx.write(CADDYFILE, &saved).await?;
+            let _ = ctx.remove(&backup).await;
             let _ = ctx
                 .runner()
                 .run("systemctl", &["reload-or-restart", SERVICE])
@@ -135,7 +135,7 @@ async fn self_drift(ctx: &Context) -> Result<Vec<String>> {
         drift.push("install caddy".into());
     }
     let want = caddyfile(&ctx.config.caddy.sites);
-    if read_or_empty(&ctx.path(CADDYFILE)).await? != want {
+    if ctx.read_or_empty(CADDYFILE).await? != want {
         let n = ctx.config.caddy.sites.len();
         drift.push(format!("configure {n} caddy site(s)"));
     }
@@ -229,14 +229,6 @@ async fn service_enabled(ctx: &Context) -> bool {
         .await
         .map(|o| o.stdout.trim() == "enabled")
         .unwrap_or(false)
-}
-
-async fn read_or_empty(path: &std::path::Path) -> Result<String> {
-    match tokio::fs::read_to_string(path).await {
-        Ok(c) => Ok(c),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(Error::io(path.display().to_string(), e)),
-    }
 }
 
 #[cfg(test)]
