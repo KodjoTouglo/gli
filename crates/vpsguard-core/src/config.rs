@@ -33,6 +33,26 @@ pub struct Config {
     pub fail2ban: Fail2banConfig,
     pub docker: DockerConfig,
     pub caddy: CaddyConfig,
+    pub postgres: PostgresConfig,
+    pub redis: RedisConfig,
+}
+
+/// PostgreSQL settings (`[postgres]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct PostgresConfig {
+    /// Install PostgreSQL and enable its service.
+    pub enabled: bool,
+    /// Databases to create if missing.
+    pub databases: Vec<String>,
+}
+
+/// Redis settings (`[redis]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct RedisConfig {
+    /// Install Redis and enable its service.
+    pub enabled: bool,
 }
 
 /// Docker runtime settings (`[docker]`).

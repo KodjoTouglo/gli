@@ -20,7 +20,7 @@ mod types;
 pub use catalog::ModuleCatalog;
 pub use config::{
     CaddyConfig, CaddySite, Config, DockerConfig, Fail2banConfig, FirewallBackend, FirewallConfig,
-    Policy, Profile, SshConfig, UpdatesConfig, UserConfig,
+    Policy, PostgresConfig, Profile, RedisConfig, SshConfig, UpdatesConfig, UserConfig,
 };
 pub use context::Context;
 pub use error::{Error, Result};

@@ -40,3 +40,11 @@ enabled = false
 [[caddy.sites]]
 domain = "example.com"
 reverse_proxy = "localhost:8080"
+
+# Opt-in databases (disabled by default).
+[postgres]
+enabled = false
+databases = ["myapp"]
+
+[redis]
+enabled = false
