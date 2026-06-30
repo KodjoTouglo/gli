@@ -17,8 +17,8 @@ mod types;
 
 pub use catalog::ModuleCatalog;
 pub use config::{
-    Config, Fail2banConfig, FirewallBackend, FirewallConfig, Policy, Profile, SshConfig,
-    UpdatesConfig, UserConfig,
+    Config, DockerConfig, Fail2banConfig, FirewallBackend, FirewallConfig, Policy, Profile,
+    SshConfig, UpdatesConfig, UserConfig,
 };
 pub use context::Context;
 pub use error::{Error, Result};

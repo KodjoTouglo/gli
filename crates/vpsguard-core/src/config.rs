@@ -31,6 +31,17 @@ pub struct Config {
     pub users: BTreeMap<String, UserConfig>,
     pub updates: UpdatesConfig,
     pub fail2ban: Fail2banConfig,
+    pub docker: DockerConfig,
+}
+
+/// Docker runtime settings (`[docker]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct DockerConfig {
+    /// Install Docker and enable its service.
+    pub enabled: bool,
+    /// Users to add to the docker group.
+    pub users: Vec<String>,
 }
 
 /// fail2ban settings (`[fail2ban]`).
