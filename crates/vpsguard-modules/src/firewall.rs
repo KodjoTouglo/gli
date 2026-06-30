@@ -38,6 +38,10 @@ impl Module for FirewallModule {
         Category::Security
     }
 
+    fn lockout_risk(&self) -> bool {
+        true
+    }
+
     async fn check(&self, ctx: &Context) -> Result<Status> {
         if !ctx.config.firewall.enabled {
             return Ok(Status::not_applicable("firewall disabled in config"));
@@ -346,6 +350,11 @@ mod tests {
         let a = vec![rule("80/tcp"), rule("443/tcp")];
         let b = vec![rule("443/tcp"), rule("80/tcp")];
         assert_eq!(hash_config("drop", 22, &a), hash_config("drop", 22, &b));
+    }
+
+    #[test]
+    fn firewall_is_lockout_risky() {
+        assert!(FirewallModule.lockout_risk());
     }
 
     #[test]

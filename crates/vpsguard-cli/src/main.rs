@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 use color_eyre::eyre::{bail, Context as _, Result};
 use vpsguard_core::{Config, Context, ModuleCatalog, State};
 
+mod lockout;
 mod render;
 
 const STARTER_CONFIG: &str = include_str!("../../../examples/configs/vpsguard.toml");
@@ -39,6 +40,9 @@ enum Command {
         /// Skip the confirmation prompt.
         #[arg(long)]
         yes: bool,
+        /// Disable the post-apply lockout guard for risky modules.
+        #[arg(long)]
+        no_guard: bool,
     },
     /// Report compliance of each module.
     Audit,
@@ -49,6 +53,19 @@ enum Command {
     },
     /// List the builtin recipes.
     Recipes,
+    /// Internal: watch for confirmation and roll back risky modules on timeout.
+    #[command(hide = true)]
+    Guard {
+        /// Comma-separated module names to roll back on timeout.
+        #[arg(long)]
+        modules: String,
+        /// Seconds to wait for confirmation.
+        #[arg(long)]
+        timeout: u64,
+        /// File whose creation signals the operator confirmed.
+        #[arg(long)]
+        commit: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -65,14 +82,35 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Init { force } => cmd_init(&cli.config, force),
         Command::Plan => cmd_plan(&cli.config).await,
-        Command::Apply { dry_run, yes } => cmd_apply(&cli.config, dry_run, yes).await,
+        Command::Apply {
+            dry_run,
+            yes,
+            no_guard,
+        } => cmd_apply(&cli.config, dry_run, yes, no_guard).await,
         Command::Audit => cmd_audit(&cli.config).await,
         Command::Rollback { module } => cmd_rollback(&cli.config, module.as_deref()).await,
         Command::Recipes => {
             cmd_recipes();
             Ok(())
         }
+        Command::Guard {
+            modules,
+            timeout,
+            commit,
+        } => cmd_guard(&cli.config, &modules, timeout, &commit).await,
     }
+}
+
+async fn cmd_guard(
+    config: &PathBuf,
+    modules: &str,
+    timeout: u64,
+    commit: &std::path::Path,
+) -> Result<()> {
+    let (ctx, catalog) = load(config)?;
+    let names: Vec<String> = modules.split(',').map(str::to_string).collect();
+    lockout::run_guard(&ctx, &catalog, &names, commit, timeout).await;
+    Ok(())
 }
 
 fn load(config_path: &PathBuf) -> Result<(Context, ModuleCatalog)> {
@@ -116,7 +154,7 @@ async fn cmd_plan(config_path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_apply(config_path: &PathBuf, dry_run: bool, yes: bool) -> Result<()> {
+async fn cmd_apply(config_path: &PathBuf, dry_run: bool, yes: bool, no_guard: bool) -> Result<()> {
     let (ctx, catalog) = load(config_path)?;
 
     let mut total = 0;
@@ -141,9 +179,15 @@ async fn cmd_apply(config_path: &PathBuf, dry_run: bool, yes: bool) -> Result<()
     }
 
     println!();
+    let mut risky = Vec::new();
     for module in catalog.iter() {
         match module.apply(&ctx, false).await {
-            Ok(report) => render::apply_report(&report),
+            Ok(report) => {
+                render::apply_report(&report);
+                if module.lockout_risk() && !report.is_noop() {
+                    risky.push(module.name().to_string());
+                }
+            }
             Err(e) => {
                 eprintln!("[x] {}: {e}", module.name());
                 eprintln!("    attempting rollback of {}...", module.name());
@@ -154,6 +198,11 @@ async fn cmd_apply(config_path: &PathBuf, dry_run: bool, yes: bool) -> Result<()
                 bail!("apply aborted on module `{}`", module.name());
             }
         }
+    }
+
+    // Interactive runs get a timed safety net; --yes (automation) and --no-guard opt out.
+    if !risky.is_empty() && !yes && !no_guard {
+        lockout::confirm_or_rollback(config_path, &risky).await?;
     }
     Ok(())
 }

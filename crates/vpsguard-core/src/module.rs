@@ -36,6 +36,12 @@ pub trait Module: Send + Sync {
     /// Category for ordering and grouping.
     fn category(&self) -> Category;
 
+    /// True for modules whose apply can lock the operator out (ssh, firewall).
+    /// These trigger the timed confirmation guard on apply.
+    fn lockout_risk(&self) -> bool {
+        false
+    }
+
     /// Inspect the system and report compliance. Read-only.
     async fn check(&self, ctx: &Context) -> Result<Status>;
 

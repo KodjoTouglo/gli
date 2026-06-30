@@ -3,8 +3,8 @@
 //! Idempotently manages Port, PermitRootLogin, PasswordAuthentication and the
 //! modern Ciphers/KexAlgorithms/MACs set. A rewritten config is validated with
 //! `sshd -t` before it replaces the live file, the daemon is restarted only on
-//! success, and the previous file is snapshotted for rollback. Full lockout
-//! protection (connectivity probe + timed auto-rollback) is not yet implemented.
+//! success, and the previous file is snapshotted for rollback. The CLI lockout
+//! guard builds the timed auto-rollback on top of this snapshot/rollback.
 
 use async_trait::async_trait;
 
@@ -41,6 +41,10 @@ impl Module for SshModule {
 
     fn category(&self) -> Category {
         Category::Security
+    }
+
+    fn lockout_risk(&self) -> bool {
+        true
     }
 
     async fn check(&self, ctx: &Context) -> Result<Status> {
@@ -366,6 +370,11 @@ mod tests {
         let changes = diff(input, &cfg());
         assert_eq!(changes.len(), 1);
         assert!(changes[0].summary.starts_with("PermitRootLogin"));
+    }
+
+    #[test]
+    fn ssh_is_lockout_risky() {
+        assert!(SshModule.lockout_risk());
     }
 
     #[test]
