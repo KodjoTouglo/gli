@@ -35,7 +35,21 @@ one config file, safely and repeatably.
 
 ## Install
 
-Build from source (Rust 1.85+):
+Prebuilt binary (Linux x86_64/arm64, macOS Intel/Apple Silicon):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/hardn/develop/install.sh | sh
+```
+
+Windows: download the `.zip` from the [Releases](https://github.com/KodjoTouglo/hardn/releases) page.
+
+With Cargo:
+
+```sh
+cargo install --git https://github.com/KodjoTouglo/hardn vpsguard-cli
+```
+
+From source (Rust 1.85+):
 
 ```sh
 git clone https://github.com/KodjoTouglo/hardn.git
@@ -43,6 +57,10 @@ cd hardn
 cargo build --release --bin vpsguard
 # binary at target/release/vpsguard
 ```
+
+Tagged releases (`v*`) publish prebuilt binaries and checksums via GitHub
+Actions. Homebrew, winget, npm, and PyPI packages that wrap these artifacts are
+planned.
 
 ## Quickstart
 
