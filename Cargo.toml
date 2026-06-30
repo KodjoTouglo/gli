@@ -14,6 +14,7 @@ rust-version = "1.85"
 # Internal crates
 vpsguard-core = { path = "crates/vpsguard-core" }
 vpsguard-modules = { path = "crates/vpsguard-modules" }
+vpsguard-state = { path = "crates/vpsguard-state" }
 
 # Async
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "time"] }
@@ -26,6 +27,9 @@ toml = "0.8"
 # CLI
 clap = { version = "4", features = ["derive"] }
 inquire = "0.7"
+
+# State
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 # Errors / logging
 thiserror = "2"
