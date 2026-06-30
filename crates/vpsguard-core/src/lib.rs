@@ -10,6 +10,7 @@ mod config;
 mod context;
 mod error;
 mod module;
+mod platform;
 mod runner;
 mod types;
 
@@ -18,5 +19,6 @@ pub use config::{Config, FirewallBackend, FirewallConfig, Policy, Profile, SshCo
 pub use context::Context;
 pub use error::{Error, Result};
 pub use module::{Category, Module};
+pub use platform::{DistroFamily, Platform};
 pub use runner::{CommandRunner, Output, SystemRunner};
 pub use types::{Change, ChangeKind, Report, State, Status};

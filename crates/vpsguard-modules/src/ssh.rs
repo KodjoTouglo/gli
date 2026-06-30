@@ -17,8 +17,6 @@ const SSHD_CONFIG: &str = "/etc/ssh/sshd_config";
 const BACKUP_SUFFIX: &str = ".vpsguard.bak";
 /// Suffix for the staged file we validate before swapping it in.
 const STAGED_SUFFIX: &str = ".vpsguard.new";
-/// systemd unit name on Debian/Ubuntu (aliases `sshd.service`).
-const SSH_SERVICE: &str = "ssh";
 
 // Modern, conservative crypto. Mirrors common CIS / Mozilla "modern" guidance.
 const CIPHERS: &str = "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com";
@@ -125,14 +123,15 @@ impl Module for SshModule {
         tokio::fs::rename(&staged, &path)
             .await
             .map_err(|e| Error::io(path.display().to_string(), e))?;
+        let service = ctx.platform().ssh_service();
         ctx.runner()
-            .run_checked("systemctl", &["restart", SSH_SERVICE])
+            .run_checked("systemctl", &["restart", service])
             .await?;
 
         report.applied = changes;
         report
             .applied
-            .push(Change::command(format!("systemctl restart {SSH_SERVICE}")));
+            .push(Change::command(format!("systemctl restart {service}")));
         Ok(report)
     }
 
@@ -153,7 +152,7 @@ impl Module for SshModule {
 
         write(&path, &saved).await?;
         ctx.runner()
-            .run_checked("systemctl", &["restart", SSH_SERVICE])
+            .run_checked("systemctl", &["restart", ctx.platform().ssh_service()])
             .await?;
         let _ = tokio::fs::remove_file(&backup).await;
         Ok(())

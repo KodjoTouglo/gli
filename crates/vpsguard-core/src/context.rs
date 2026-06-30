@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::{CommandRunner, Config, SystemRunner};
+use crate::{CommandRunner, Config, DistroFamily, Platform, SystemRunner};
 
 /// Shared, read-only context for a module operation.
 ///
@@ -15,25 +15,35 @@ pub struct Context {
     pub config: Config,
     root: PathBuf,
     runner: Arc<dyn CommandRunner>,
+    platform: Platform,
 }
 
 impl Context {
-    /// Production context: real filesystem root and system command runner.
+    /// Production context: real root, system runner, detected platform.
     pub fn system(config: Config) -> Self {
         Self {
             config,
             root: PathBuf::from("/"),
             runner: Arc::new(SystemRunner),
+            platform: Platform::detect(),
         }
     }
 
-    /// Build a context with explicit root and runner (used by tests).
+    /// Build a context with explicit root and runner (used by tests). Platform
+    /// defaults to Debian (the primary target); override with `with_platform`.
     pub fn with_parts(config: Config, root: PathBuf, runner: Arc<dyn CommandRunner>) -> Self {
         Self {
             config,
             root,
             runner,
+            platform: Platform::of(DistroFamily::Debian),
         }
+    }
+
+    /// Override the platform (tests exercising distro-specific behaviour).
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.platform = platform;
+        self
     }
 
     /// Resolve an absolute-looking path (`/etc/...`) against [`Self::root`].
@@ -45,5 +55,9 @@ impl Context {
 
     pub fn runner(&self) -> &dyn CommandRunner {
         self.runner.as_ref()
+    }
+
+    pub fn platform(&self) -> &Platform {
+        &self.platform
     }
 }
