@@ -28,6 +28,16 @@ allow = ["80/tcp", "443/tcp"]
 jails = ["sshd"]
 "#;
 
+const DOCKER_HOST: &str = r#"
+profile = "balanced"
+
+[firewall]
+allow = []
+
+[docker]
+enabled = true
+"#;
+
 const BUILTINS: &[Recipe] = &[
     Recipe {
         name: "baseline",
@@ -38,6 +48,11 @@ const BUILTINS: &[Recipe] = &[
         name: "web-server",
         description: "Baseline plus inbound 80/443 for a public web server",
         preset: WEB_SERVER,
+    },
+    Recipe {
+        name: "docker-host",
+        description: "Baseline plus Docker installed and enabled",
+        preset: DOCKER_HOST,
     },
 ];
 
