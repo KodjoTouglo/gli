@@ -40,3 +40,9 @@ enabled = false
 [[caddy.sites]]
 domain = "example.com"
 reverse_proxy = "localhost:8080"
+
+# Opt-in Tailscale (disabled by default).
+[tailscale]
+enabled = false
+# auth_key = "tskey-..."
+ssh = false

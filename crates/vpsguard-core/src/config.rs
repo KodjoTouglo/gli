@@ -33,6 +33,19 @@ pub struct Config {
     pub fail2ban: Fail2banConfig,
     pub docker: DockerConfig,
     pub caddy: CaddyConfig,
+    pub tailscale: TailscaleConfig,
+}
+
+/// Tailscale settings (`[tailscale]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct TailscaleConfig {
+    /// Install Tailscale and bring the node up.
+    pub enabled: bool,
+    /// Pre-auth key for non-interactive `tailscale up`.
+    pub auth_key: Option<String>,
+    /// Enable Tailscale SSH on this node.
+    pub ssh: bool,
 }
 
 /// Docker runtime settings (`[docker]`).
