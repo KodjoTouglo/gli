@@ -14,7 +14,7 @@ mod runner;
 mod types;
 
 pub use catalog::ModuleCatalog;
-pub use config::{Config, Profile, SshConfig};
+pub use config::{Config, FirewallBackend, FirewallConfig, Policy, Profile, SshConfig};
 pub use context::Context;
 pub use error::{Error, Result};
 pub use module::{Category, Module};

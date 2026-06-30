@@ -7,3 +7,9 @@ port = 2222
 permit_root_login = false
 password_auth = false
 modern_ciphers = true
+
+[firewall]
+enabled = true
+backend = "nftables"
+default = "deny"
+allow = ["80/tcp", "443/tcp"]

@@ -40,6 +40,7 @@ fn config() -> Config {
             password_auth: false,
             modern_ciphers: false,
         },
+        ..Config::default()
     }
 }
 
