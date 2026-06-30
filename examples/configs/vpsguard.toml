@@ -32,3 +32,11 @@ maxretry = 5
 [docker]
 enabled = false
 users = ["deploy"]
+
+# Opt-in Caddy reverse proxy with automatic HTTPS (disabled by default).
+[caddy]
+enabled = false
+
+[[caddy.sites]]
+domain = "example.com"
+reverse_proxy = "localhost:8080"

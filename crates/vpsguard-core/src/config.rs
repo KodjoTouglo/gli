@@ -32,6 +32,7 @@ pub struct Config {
     pub updates: UpdatesConfig,
     pub fail2ban: Fail2banConfig,
     pub docker: DockerConfig,
+    pub caddy: CaddyConfig,
 }
 
 /// Docker runtime settings (`[docker]`).
@@ -42,6 +43,28 @@ pub struct DockerConfig {
     pub enabled: bool,
     /// Users to add to the docker group.
     pub users: Vec<String>,
+}
+
+/// Caddy reverse-proxy settings (`[caddy]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct CaddyConfig {
+    /// Install Caddy and manage its Caddyfile.
+    pub enabled: bool,
+    /// Sites to serve (`[[caddy.sites]]`).
+    pub sites: Vec<CaddySite>,
+}
+
+/// One Caddy site block. Automatic HTTPS applies to public domains.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct CaddySite {
+    /// Domain to serve, e.g. "example.com".
+    pub domain: String,
+    /// Upstream to reverse-proxy to, e.g. "localhost:8080".
+    pub reverse_proxy: Option<String>,
+    /// Directory to serve statically (used when reverse_proxy is unset).
+    pub root: Option<String>,
 }
 
 /// fail2ban settings (`[fail2ban]`).
