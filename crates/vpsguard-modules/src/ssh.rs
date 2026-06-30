@@ -10,13 +10,13 @@ use async_trait::async_trait;
 
 use vpsguard_core::{Category, Change, Context, Error, Module, Report, Result, SshConfig, Status};
 
+use crate::common::{with_suffix, write};
+
 const SSHD_CONFIG: &str = "/etc/ssh/sshd_config";
 /// Suffix for the pre-apply snapshot used by `rollback`.
 const BACKUP_SUFFIX: &str = ".vpsguard.bak";
 /// Suffix for the staged file we validate before swapping it in.
 const STAGED_SUFFIX: &str = ".vpsguard.new";
-/// systemd unit name on Debian/Ubuntu (aliases `sshd.service`).
-const SSH_SERVICE: &str = "ssh";
 
 // Modern, conservative crypto. Mirrors common CIS / Mozilla "modern" guidance.
 const CIPHERS: &str = "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com";
@@ -123,14 +123,15 @@ impl Module for SshModule {
         tokio::fs::rename(&staged, &path)
             .await
             .map_err(|e| Error::io(path.display().to_string(), e))?;
+        let service = ctx.platform().ssh_service();
         ctx.runner()
-            .run_checked("systemctl", &["restart", SSH_SERVICE])
+            .run_checked("systemctl", &["restart", service])
             .await?;
 
         report.applied = changes;
         report
             .applied
-            .push(Change::command(format!("systemctl restart {SSH_SERVICE}")));
+            .push(Change::command(format!("systemctl restart {service}")));
         Ok(report)
     }
 
@@ -151,7 +152,7 @@ impl Module for SshModule {
 
         write(&path, &saved).await?;
         ctx.runner()
-            .run_checked("systemctl", &["restart", SSH_SERVICE])
+            .run_checked("systemctl", &["restart", ctx.platform().ssh_service()])
             .await?;
         let _ = tokio::fs::remove_file(&backup).await;
         Ok(())
@@ -277,23 +278,6 @@ async fn read_or_empty(path: &std::path::Path) -> Result<String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
         Err(e) => Err(Error::io(path.display().to_string(), e)),
     }
-}
-
-async fn write(path: &std::path::Path, body: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|e| Error::io(parent.display().to_string(), e))?;
-    }
-    tokio::fs::write(path, body)
-        .await
-        .map_err(|e| Error::io(path.display().to_string(), e))
-}
-
-fn with_suffix(path: &std::path::Path, suffix: &str) -> std::path::PathBuf {
-    let mut s = path.as_os_str().to_os_string();
-    s.push(suffix);
-    std::path::PathBuf::from(s)
 }
 
 #[cfg(test)]

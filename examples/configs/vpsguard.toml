@@ -7,3 +7,23 @@ port = 2222
 permit_root_login = false
 password_auth = false
 modern_ciphers = true
+
+[firewall]
+enabled = true
+backend = "nftables"
+default = "deny"
+allow = ["80/tcp", "443/tcp"]
+
+[users.deploy]
+sudo = true
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAExampleKeyReplaceMe deploy@vpsguard"]
+
+[updates]
+enabled = true
+auto_reboot = "02:00"
+
+[fail2ban]
+enabled = true
+jails = ["sshd"]
+bantime = "10m"
+maxretry = 5

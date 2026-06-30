@@ -5,13 +5,28 @@
 
 #![forbid(unsafe_code)]
 
+mod common;
+mod fail2ban;
+mod firewall;
 mod ssh;
+mod updates;
+mod users;
 
+pub use fail2ban::Fail2banModule;
+pub use firewall::FirewallModule;
 pub use ssh::SshModule;
+pub use updates::UpdatesModule;
+pub use users::UsersModule;
 
 use vpsguard_core::ModuleCatalog;
 
 /// Build the catalog of modules enabled for the current MVP.
 pub fn catalog() -> ModuleCatalog {
-    ModuleCatalog::new(vec![Box::new(SshModule)])
+    ModuleCatalog::new(vec![
+        Box::new(SshModule),
+        Box::new(FirewallModule),
+        Box::new(UsersModule),
+        Box::new(UpdatesModule),
+        Box::new(Fail2banModule),
+    ])
 }

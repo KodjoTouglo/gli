@@ -3,6 +3,8 @@
 //! Only the fields needed by the MVP modules are modelled. Unknown tables are
 //! ignored so the format can grow without breaking older binaries.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 /// Hardening profile. Selects the default strictness of modules.
@@ -22,6 +24,65 @@ pub enum Profile {
 pub struct Config {
     pub profile: Profile,
     pub ssh: SshConfig,
+    pub firewall: FirewallConfig,
+    /// Managed users, keyed by username (`[users.deploy]`).
+    pub users: BTreeMap<String, UserConfig>,
+    pub updates: UpdatesConfig,
+    pub fail2ban: Fail2banConfig,
+}
+
+/// fail2ban settings (`[fail2ban]`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Fail2banConfig {
+    /// Install and enable fail2ban.
+    pub enabled: bool,
+    /// Jails to enable, e.g. ["sshd"].
+    pub jails: Vec<String>,
+    /// Ban duration (fail2ban syntax, e.g. "10m"); None uses fail2ban default.
+    pub bantime: Option<String>,
+    /// Failures before a ban; None uses fail2ban default.
+    pub maxretry: Option<u32>,
+}
+
+impl Default for Fail2banConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            jails: vec!["sshd".to_string()],
+            bantime: None,
+            maxretry: None,
+        }
+    }
+}
+
+/// Automatic update settings (`[updates]`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UpdatesConfig {
+    /// Enable unattended security updates.
+    pub enabled: bool,
+    /// Daily reboot time "HH:MM" when updates require it; None disables reboot.
+    pub auto_reboot: Option<String>,
+}
+
+impl Default for UpdatesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            auto_reboot: None,
+        }
+    }
+}
+
+/// A managed user account (`[users.<name>]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct UserConfig {
+    /// Grant passwordless-free sudo via /etc/sudoers.d.
+    pub sudo: bool,
+    /// Authorized SSH public keys to install.
+    pub ssh_keys: Vec<String>,
 }
 
 /// SSH daemon hardening settings (`[ssh]`).
@@ -47,6 +108,48 @@ impl Default for SshConfig {
             permit_root_login: false,
             password_auth: false,
             modern_ciphers: true,
+        }
+    }
+}
+
+/// Firewall backend. Only nftables is supported for now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum FirewallBackend {
+    #[default]
+    Nftables,
+}
+
+/// Default policy for the input chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Policy {
+    #[default]
+    Deny,
+    Allow,
+}
+
+/// Firewall settings (`[firewall]`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FirewallConfig {
+    /// Whether vpsguard manages the firewall at all.
+    pub enabled: bool,
+    /// Backend used to program rules.
+    pub backend: FirewallBackend,
+    /// Input policy when no allow rule matches.
+    pub default: Policy,
+    /// Allow rules, e.g. "80/tcp", "443/tcp", "22/tcp from 10.0.0.0/8".
+    pub allow: Vec<String>,
+}
+
+impl Default for FirewallConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            backend: FirewallBackend::Nftables,
+            default: Policy::Deny,
+            allow: Vec::new(),
         }
     }
 }

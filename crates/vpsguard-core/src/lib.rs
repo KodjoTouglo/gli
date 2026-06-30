@@ -10,13 +10,18 @@ mod config;
 mod context;
 mod error;
 mod module;
+mod platform;
 mod runner;
 mod types;
 
 pub use catalog::ModuleCatalog;
-pub use config::{Config, Profile, SshConfig};
+pub use config::{
+    Config, Fail2banConfig, FirewallBackend, FirewallConfig, Policy, Profile, SshConfig,
+    UpdatesConfig, UserConfig,
+};
 pub use context::Context;
 pub use error::{Error, Result};
 pub use module::{Category, Module};
+pub use platform::{DistroFamily, Platform};
 pub use runner::{CommandRunner, Output, SystemRunner};
 pub use types::{Change, ChangeKind, Report, State, Status};
