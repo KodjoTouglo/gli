@@ -8,9 +8,11 @@
 
 use async_trait::async_trait;
 
+use std::path::Path;
+
 use vpsguard_core::{Category, Change, Context, Error, Module, Report, Result, SshConfig, Status};
 
-use crate::common::{with_suffix, write};
+use crate::common::with_suffix;
 
 const SSHD_CONFIG: &str = "/etc/ssh/sshd_config";
 /// Suffix for the pre-apply snapshot used by `rollback`.
@@ -48,16 +50,10 @@ impl Module for SshModule {
     }
 
     async fn check(&self, ctx: &Context) -> Result<Status> {
-        let path = ctx.path(SSHD_CONFIG);
-        let content = match tokio::fs::read_to_string(&path).await {
-            Ok(c) => c,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Status::not_applicable(format!(
-                    "{} not found (sshd not installed?)",
-                    path.display()
-                )));
-            }
-            Err(e) => return Err(Error::io(path.display().to_string(), e)),
+        let Some(content) = ctx.read(SSHD_CONFIG).await? else {
+            return Ok(Status::not_applicable(
+                "sshd_config not found (sshd not installed?)",
+            ));
         };
 
         let drift = diff(&content, &ctx.config.ssh);
@@ -74,22 +70,16 @@ impl Module for SshModule {
     }
 
     async fn plan(&self, ctx: &Context) -> Result<Vec<Change>> {
-        let path = ctx.path(SSHD_CONFIG);
-        let content = read_or_empty(&path).await?;
+        let content = ctx.read_or_empty(SSHD_CONFIG).await?;
         Ok(diff(&content, &ctx.config.ssh))
     }
 
     async fn apply(&self, ctx: &Context, dry_run: bool) -> Result<Report> {
-        let path = ctx.path(SSHD_CONFIG);
-        let content = match tokio::fs::read_to_string(&path).await {
-            Ok(c) => c,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(Error::Module {
-                    module: "ssh".into(),
-                    message: format!("{} not found; nothing to harden", path.display()),
-                });
-            }
-            Err(e) => return Err(Error::io(path.display().to_string(), e)),
+        let Some(content) = ctx.read(SSHD_CONFIG).await? else {
+            return Err(Error::Module {
+                module: "ssh".into(),
+                message: "sshd_config not found; nothing to harden".into(),
+            });
         };
 
         let changes = diff(&content, &ctx.config.ssh);
@@ -107,16 +97,16 @@ impl Module for SshModule {
         let rendered = render(&content, &desired_directives(&ctx.config.ssh));
 
         // 1. Snapshot the current file for rollback.
-        let backup = with_suffix(&path, BACKUP_SUFFIX);
-        write(&backup, &content).await?;
+        let backup = with_suffix(Path::new(SSHD_CONFIG), BACKUP_SUFFIX);
+        ctx.write(&backup, &content).await?;
 
         // 2. Stage + validate before touching the live file.
-        let staged = with_suffix(&path, STAGED_SUFFIX);
-        write(&staged, &rendered).await?;
-        let staged_str = staged.to_string_lossy().into_owned();
+        let staged = with_suffix(Path::new(SSHD_CONFIG), STAGED_SUFFIX);
+        ctx.write(&staged, &rendered).await?;
+        let staged_str = ctx.path(&staged).to_string_lossy().into_owned();
         let validation = ctx.runner().run("sshd", &["-t", "-f", &staged_str]).await?;
         if !validation.success() {
-            let _ = tokio::fs::remove_file(&staged).await;
+            let _ = ctx.remove(&staged).await;
             return Err(Error::Safety(format!(
                 "candidate sshd_config rejected by `sshd -t`: {}",
                 validation.stderr.trim()
@@ -124,9 +114,7 @@ impl Module for SshModule {
         }
 
         // 3. Swap staged file into place, then restart the daemon.
-        tokio::fs::rename(&staged, &path)
-            .await
-            .map_err(|e| Error::io(path.display().to_string(), e))?;
+        ctx.rename(&staged, Path::new(SSHD_CONFIG)).await?;
         let service = ctx.platform().ssh_service();
         ctx.runner()
             .run_checked("systemctl", &["restart", service])
@@ -140,25 +128,19 @@ impl Module for SshModule {
     }
 
     async fn rollback(&self, ctx: &Context) -> Result<()> {
-        let path = ctx.path(SSHD_CONFIG);
-        let backup = with_suffix(&path, BACKUP_SUFFIX);
-
-        let saved = match tokio::fs::read_to_string(&backup).await {
-            Ok(c) => c,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(Error::Module {
-                    module: "ssh".into(),
-                    message: "no snapshot to roll back to".into(),
-                });
-            }
-            Err(e) => return Err(Error::io(backup.display().to_string(), e)),
+        let backup = with_suffix(Path::new(SSHD_CONFIG), BACKUP_SUFFIX);
+        let Some(saved) = ctx.read(&backup).await? else {
+            return Err(Error::Module {
+                module: "ssh".into(),
+                message: "no snapshot to roll back to".into(),
+            });
         };
 
-        write(&path, &saved).await?;
+        ctx.write(SSHD_CONFIG, &saved).await?;
         ctx.runner()
             .run_checked("systemctl", &["restart", ctx.platform().ssh_service()])
             .await?;
-        let _ = tokio::fs::remove_file(&backup).await;
+        let _ = ctx.remove(&backup).await;
         Ok(())
     }
 }
@@ -270,18 +252,6 @@ fn directive_value(line: &str) -> String {
 /// which is how `sshd` itself treats keywords and booleans.
 fn values_equal(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
-}
-
-// ---------------------------------------------------------------------------
-// IO helpers
-// ---------------------------------------------------------------------------
-
-async fn read_or_empty(path: &std::path::Path) -> Result<String> {
-    match tokio::fs::read_to_string(path).await {
-        Ok(c) => Ok(c),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(Error::io(path.display().to_string(), e)),
-    }
 }
 
 #[cfg(test)]

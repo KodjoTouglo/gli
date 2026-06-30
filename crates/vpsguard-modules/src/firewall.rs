@@ -14,8 +14,6 @@ use vpsguard_core::{
     Category, Change, Context, Error, FirewallConfig, Module, Policy, Report, Result, Status,
 };
 
-use crate::common::write;
-
 const TABLE: &str = "vpsguard";
 const STAGED: &str = "/etc/vpsguard/firewall.staged.nft";
 const BACKUP: &str = "/etc/vpsguard/firewall.backup.nft";
@@ -80,20 +78,18 @@ impl Module for FirewallModule {
         }
 
         // Snapshot the current table so rollback can restore (or remove) it.
-        let backup = ctx.path(BACKUP);
         let backup_body = match live {
             Some(rules) => format!("delete table inet {TABLE}\n{rules}"),
             None => format!("delete table inet {TABLE}\n"),
         };
-        write(&backup, &backup_body).await?;
+        ctx.write(BACKUP, &backup_body).await?;
 
         // Stage, validate, then apply atomically.
-        let staged = ctx.path(STAGED);
-        write(&staged, &want.script).await?;
-        let staged_str = staged.to_string_lossy().into_owned();
+        ctx.write(STAGED, &want.script).await?;
+        let staged_str = ctx.path(STAGED).to_string_lossy().into_owned();
         let validation = ctx.runner().run("nft", &["-c", "-f", &staged_str]).await?;
         if !validation.success() {
-            let _ = tokio::fs::remove_file(&staged).await;
+            let _ = ctx.remove(STAGED).await;
             return Err(Error::Safety(format!(
                 "candidate nft ruleset rejected: {}",
                 validation.stderr.trim()
@@ -111,24 +107,18 @@ impl Module for FirewallModule {
     }
 
     async fn rollback(&self, ctx: &Context) -> Result<()> {
-        let backup = ctx.path(BACKUP);
-        let body = match tokio::fs::read_to_string(&backup).await {
-            Ok(b) => b,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(Error::Module {
-                    module: "firewall".into(),
-                    message: "no snapshot to roll back to".into(),
-                });
-            }
-            Err(e) => return Err(Error::io(backup.display().to_string(), e)),
+        let Some(body) = ctx.read(BACKUP).await? else {
+            return Err(Error::Module {
+                module: "firewall".into(),
+                message: "no snapshot to roll back to".into(),
+            });
         };
 
         // `delete table` fails if absent; ignore that, then re-apply the snapshot.
-        let staged = ctx.path(STAGED);
-        write(&staged, &body).await?;
-        let staged_str = staged.to_string_lossy().into_owned();
+        ctx.write(STAGED, &body).await?;
+        let staged_str = ctx.path(STAGED).to_string_lossy().into_owned();
         ctx.runner().run("nft", &["-f", &staged_str]).await?;
-        let _ = tokio::fs::remove_file(&backup).await;
+        let _ = ctx.remove(BACKUP).await;
         Ok(())
     }
 }

@@ -7,11 +7,7 @@
 
 use async_trait::async_trait;
 
-use vpsguard_core::{
-    Category, Change, Context, DistroFamily, Error, Module, Report, Result, Status,
-};
-
-use crate::common::write;
+use vpsguard_core::{Category, Change, Context, DistroFamily, Module, Report, Result, Status};
 
 const APT_PERIODIC: &str = "/etc/apt/apt.conf.d/20auto-upgrades";
 const APT_REBOOT: &str = "/etc/apt/apt.conf.d/51vpsguard-reboot";
@@ -89,8 +85,8 @@ impl Module for UpdatesModule {
     async fn rollback(&self, ctx: &Context) -> Result<()> {
         match ctx.platform().family {
             DistroFamily::Debian => {
-                let _ = tokio::fs::remove_file(ctx.path(APT_PERIODIC)).await;
-                let _ = tokio::fs::remove_file(ctx.path(APT_REBOOT)).await;
+                let _ = ctx.remove(APT_PERIODIC).await;
+                let _ = ctx.remove(APT_REBOOT).await;
             }
             DistroFamily::Rhel => {
                 let _ = ctx
@@ -113,17 +109,17 @@ async fn debian_drift(ctx: &Context) -> Result<Vec<String>> {
     if !pkg_installed(ctx, "dpkg", &["-s", "unattended-upgrades"]).await {
         drift.push("install unattended-upgrades".into());
     }
-    if read_or_empty(&ctx.path(APT_PERIODIC)).await? != apt_periodic() {
+    if ctx.read_or_empty(APT_PERIODIC).await? != apt_periodic() {
         drift.push("enable periodic unattended upgrades".into());
     }
     match &ctx.config.updates.auto_reboot {
         Some(time) => {
-            if read_or_empty(&ctx.path(APT_REBOOT)).await? != apt_reboot(time) {
+            if ctx.read_or_empty(APT_REBOOT).await? != apt_reboot(time) {
                 drift.push(format!("set auto-reboot window {time}"));
             }
         }
         None => {
-            if !read_or_empty(&ctx.path(APT_REBOOT)).await?.is_empty() {
+            if !ctx.read_or_empty(APT_REBOOT).await?.is_empty() {
                 drift.push("disable auto-reboot".into());
             }
         }
@@ -179,7 +175,7 @@ async fn rhel_drift(ctx: &Context) -> Result<Vec<String>> {
         drift.push("install dnf-automatic".into());
     }
     let want = dnf_conf(ctx.config.updates.auto_reboot.is_some());
-    if read_or_empty(&ctx.path(DNF_CONF)).await? != want {
+    if ctx.read_or_empty(DNF_CONF).await? != want {
         drift.push("configure dnf-automatic".into());
     }
     if !timer_enabled(ctx).await {
@@ -251,9 +247,8 @@ async fn write_if_changed(
     report: &mut Report,
     summary: &'static str,
 ) -> Result<()> {
-    let path = ctx.path(rel);
-    if read_or_empty(&path).await? != body {
-        write(&path, body).await?;
+    if ctx.read_or_empty(rel).await? != body {
+        ctx.write(rel, body).await?;
         report.applied.push(Change::command(summary));
     }
     Ok(())
@@ -265,22 +260,11 @@ async fn remove_if_present(
     report: &mut Report,
     summary: &'static str,
 ) -> Result<()> {
-    let path = ctx.path(rel);
-    if tokio::fs::try_exists(&path).await.unwrap_or(false) {
-        tokio::fs::remove_file(&path)
-            .await
-            .map_err(|e| Error::io(path.display().to_string(), e))?;
+    if ctx.exists(rel).await? {
+        ctx.remove(rel).await?;
         report.applied.push(Change::command(summary));
     }
     Ok(())
-}
-
-async fn read_or_empty(path: &std::path::Path) -> Result<String> {
-    match tokio::fs::read_to_string(path).await {
-        Ok(c) => Ok(c),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(Error::io(path.display().to_string(), e)),
-    }
 }
 
 #[cfg(test)]

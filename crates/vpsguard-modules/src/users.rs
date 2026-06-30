@@ -9,8 +9,6 @@ use async_trait::async_trait;
 
 use vpsguard_core::{Category, Change, Context, Error, Module, Report, Result, Status, UserConfig};
 
-use crate::common::write;
-
 const PASSWD: &str = "/etc/passwd";
 const SUDOERS_DIR: &str = "/etc/sudoers.d";
 
@@ -87,8 +85,7 @@ impl Module for UsersModule {
         // Revoke managed sudo grants. Accounts and keys are additive and left
         // in place (removing them risks locking out the operator).
         for name in ctx.config.users.keys() {
-            let file = ctx.path(sudoers_file(name));
-            let _ = tokio::fs::remove_file(&file).await;
+            let _ = ctx.remove(sudoers_file(name)).await;
         }
         Ok(())
     }
@@ -110,14 +107,16 @@ async fn apply_user(
     }
 
     if !spec.ssh_keys.is_empty() {
-        let path = ctx.path(authorized_keys(name));
-        let existing = read_or_empty(&path).await?;
+        let ak_abs = authorized_keys(name);
+        let existing = ctx.read_or_empty(&ak_abs).await?;
         let merged = merge_keys(&existing, &spec.ssh_keys);
         if merged != existing {
-            write(&path, &merged).await?;
-            let ssh_dir = ctx.path(format!("/home/{name}/.ssh"));
-            let ssh_dir = ssh_dir.to_string_lossy().into_owned();
-            let ak = path.to_string_lossy().into_owned();
+            ctx.write(&ak_abs, &merged).await?;
+            let ssh_dir = ctx
+                .path(format!("/home/{name}/.ssh"))
+                .to_string_lossy()
+                .into_owned();
+            let ak = ctx.path(&ak_abs).to_string_lossy().into_owned();
             ctx.runner()
                 .run_checked("chmod", &["700", &ssh_dir])
                 .await?;
@@ -131,15 +130,15 @@ async fn apply_user(
         }
     }
 
-    let sudoers = ctx.path(sudoers_file(name));
+    let sudoers_abs = sudoers_file(name);
     if spec.sudo {
         let want = sudoers_content(name);
-        if read_or_empty(&sudoers).await? != want {
-            write(&sudoers, &want).await?;
-            let path = sudoers.to_string_lossy().into_owned();
+        if ctx.read_or_empty(&sudoers_abs).await? != want {
+            ctx.write(&sudoers_abs, &want).await?;
+            let path = ctx.path(&sudoers_abs).to_string_lossy().into_owned();
             let check = ctx.runner().run("visudo", &["-cf", &path]).await?;
             if !check.success() {
-                let _ = tokio::fs::remove_file(&sudoers).await;
+                let _ = ctx.remove(&sudoers_abs).await;
                 return Err(Error::Safety(format!(
                     "sudoers file for {name} rejected by visudo: {}",
                     check.stderr.trim()
@@ -149,10 +148,8 @@ async fn apply_user(
                 .applied
                 .push(Change::command(format!("grant sudo to {name}")));
         }
-    } else if tokio::fs::try_exists(&sudoers).await.unwrap_or(false) {
-        tokio::fs::remove_file(&sudoers)
-            .await
-            .map_err(|e| Error::io(sudoers.display().to_string(), e))?;
+    } else if ctx.exists(&sudoers_abs).await? {
+        ctx.remove(&sudoers_abs).await?;
         report
             .applied
             .push(Change::command(format!("revoke sudo from {name}")));
@@ -168,13 +165,13 @@ async fn user_drift(ctx: &Context, name: &str, spec: &UserConfig) -> Result<Vec<
         drift.push(format!("create user {name}"));
     }
     if !spec.ssh_keys.is_empty() {
-        let existing = read_or_empty(&ctx.path(authorized_keys(name))).await?;
+        let existing = ctx.read_or_empty(authorized_keys(name)).await?;
         let missing = missing_keys(&existing, &spec.ssh_keys);
         if missing > 0 {
             drift.push(format!("install {missing} SSH key(s) for {name}"));
         }
     }
-    let sudoers = read_or_empty(&ctx.path(sudoers_file(name))).await?;
+    let sudoers = ctx.read_or_empty(sudoers_file(name)).await?;
     if spec.sudo && sudoers != sudoers_content(name) {
         drift.push(format!("grant sudo to {name}"));
     } else if !spec.sudo && !sudoers.is_empty() {
@@ -227,17 +224,9 @@ fn merge_keys(existing: &str, want: &[String]) -> String {
 // ---------------------------------------------------------------------------
 
 async fn user_exists(ctx: &Context, name: &str) -> Result<bool> {
-    let passwd = read_or_empty(&ctx.path(PASSWD)).await?;
+    let passwd = ctx.read_or_empty(PASSWD).await?;
     let prefix = format!("{name}:");
     Ok(passwd.lines().any(|l| l.starts_with(&prefix)))
-}
-
-async fn read_or_empty(path: &std::path::Path) -> Result<String> {
-    match tokio::fs::read_to_string(path).await {
-        Ok(c) => Ok(c),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(Error::io(path.display().to_string(), e)),
-    }
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ mod catalog;
 mod config;
 mod context;
 mod error;
+mod fs;
 mod module;
 mod platform;
 pub mod recipes;
@@ -22,6 +23,7 @@ pub use config::{
 };
 pub use context::Context;
 pub use error::{Error, Result};
+pub use fs::{FileSystem, LocalFs};
 pub use module::{Category, Module};
 pub use platform::{DistroFamily, Platform};
 pub use runner::{CommandRunner, Output, SystemRunner};

@@ -9,10 +9,8 @@
 use async_trait::async_trait;
 
 use vpsguard_core::{
-    Category, Change, Context, DistroFamily, Error, Fail2banConfig, Module, Report, Result, Status,
+    Category, Change, Context, DistroFamily, Fail2banConfig, Module, Report, Result, Status,
 };
-
-use crate::common::write;
 
 const JAIL_FILE: &str = "/etc/fail2ban/jail.d/vpsguard.local";
 const SERVICE: &str = "fail2ban";
@@ -85,9 +83,8 @@ impl Module for Fail2banModule {
         }
 
         let want = jail_config(&ctx.config.fail2ban, ctx.config.ssh.port);
-        let path = ctx.path(JAIL_FILE);
-        if read_or_empty(&path).await? != want {
-            write(&path, &want).await?;
+        if ctx.read_or_empty(JAIL_FILE).await? != want {
+            ctx.write(JAIL_FILE, &want).await?;
             report.applied.push(Change::command("write fail2ban jails"));
         }
 
@@ -104,7 +101,7 @@ impl Module for Fail2banModule {
     }
 
     async fn rollback(&self, ctx: &Context) -> Result<()> {
-        let _ = tokio::fs::remove_file(ctx.path(JAIL_FILE)).await;
+        let _ = ctx.remove(JAIL_FILE).await;
         let _ = ctx
             .runner()
             .run("systemctl", &["reload-or-restart", SERVICE])
@@ -119,7 +116,7 @@ async fn self_drift(ctx: &Context, pkg: &PackageOps) -> Result<Vec<String>> {
         drift.push("install fail2ban".into());
     }
     let want = jail_config(&ctx.config.fail2ban, ctx.config.ssh.port);
-    if read_or_empty(&ctx.path(JAIL_FILE)).await? != want {
+    if ctx.read_or_empty(JAIL_FILE).await? != want {
         drift.push("configure fail2ban jails".into());
     }
     if !service_enabled(ctx).await {
@@ -199,14 +196,6 @@ async fn service_enabled(ctx: &Context) -> bool {
         .await
         .map(|o| o.stdout.trim() == "enabled")
         .unwrap_or(false)
-}
-
-async fn read_or_empty(path: &std::path::Path) -> Result<String> {
-    match tokio::fs::read_to_string(path).await {
-        Ok(c) => Ok(c),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(Error::io(path.display().to_string(), e)),
-    }
 }
 
 #[cfg(test)]
