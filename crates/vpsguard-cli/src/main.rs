@@ -47,6 +47,8 @@ enum Command {
         /// Limit rollback to one module by name.
         module: Option<String>,
     },
+    /// List the builtin recipes.
+    Recipes,
 }
 
 #[tokio::main]
@@ -66,6 +68,10 @@ async fn main() -> Result<()> {
         Command::Apply { dry_run, yes } => cmd_apply(&cli.config, dry_run, yes).await,
         Command::Audit => cmd_audit(&cli.config).await,
         Command::Rollback { module } => cmd_rollback(&cli.config, module.as_deref()).await,
+        Command::Recipes => {
+            cmd_recipes();
+            Ok(())
+        }
     }
 }
 
@@ -73,8 +79,15 @@ fn load(config_path: &PathBuf) -> Result<(Context, ModuleCatalog)> {
     let raw = std::fs::read_to_string(config_path)
         .with_context(|| format!("reading config {}", config_path.display()))?;
     let config =
-        Config::from_toml(&raw).with_context(|| format!("parsing {}", config_path.display()))?;
+        Config::resolve(&raw).with_context(|| format!("parsing {}", config_path.display()))?;
     Ok((Context::system(config), vpsguard_modules::catalog()))
+}
+
+fn cmd_recipes() {
+    println!("Available recipes (set `recipe = \"<name>\"` in vpsguard.toml):\n");
+    for r in vpsguard_core::recipes::all() {
+        println!("  {:<12} {}", r.name, r.description);
+    }
 }
 
 fn cmd_init(config_path: &PathBuf, force: bool) -> Result<()> {

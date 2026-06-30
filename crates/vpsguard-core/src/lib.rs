@@ -11,6 +11,7 @@ mod context;
 mod error;
 mod module;
 mod platform;
+pub mod recipes;
 mod runner;
 mod types;
 
