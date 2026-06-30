@@ -25,6 +25,7 @@ toml = "0.8"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
+inquire = "0.7"
 
 # Errors / logging
 thiserror = "2"
