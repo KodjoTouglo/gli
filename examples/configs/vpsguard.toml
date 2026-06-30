@@ -27,3 +27,8 @@ enabled = true
 jails = ["sshd"]
 bantime = "10m"
 maxretry = 5
+
+# Opt-in Docker runtime (disabled by default).
+[docker]
+enabled = false
+users = ["deploy"]
