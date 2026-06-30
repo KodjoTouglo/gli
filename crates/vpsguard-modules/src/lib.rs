@@ -8,13 +8,19 @@
 mod common;
 mod firewall;
 mod ssh;
+mod users;
 
 pub use firewall::FirewallModule;
 pub use ssh::SshModule;
+pub use users::UsersModule;
 
 use vpsguard_core::ModuleCatalog;
 
 /// Build the catalog of modules enabled for the current MVP.
 pub fn catalog() -> ModuleCatalog {
-    ModuleCatalog::new(vec![Box::new(SshModule), Box::new(FirewallModule)])
+    ModuleCatalog::new(vec![
+        Box::new(SshModule),
+        Box::new(FirewallModule),
+        Box::new(UsersModule),
+    ])
 }

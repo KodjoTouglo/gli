@@ -3,6 +3,8 @@
 //! Only the fields needed by the MVP modules are modelled. Unknown tables are
 //! ignored so the format can grow without breaking older binaries.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 /// Hardening profile. Selects the default strictness of modules.
@@ -23,6 +25,18 @@ pub struct Config {
     pub profile: Profile,
     pub ssh: SshConfig,
     pub firewall: FirewallConfig,
+    /// Managed users, keyed by username (`[users.deploy]`).
+    pub users: BTreeMap<String, UserConfig>,
+}
+
+/// A managed user account (`[users.<name>]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct UserConfig {
+    /// Grant passwordless-free sudo via /etc/sudoers.d.
+    pub sudo: bool,
+    /// Authorized SSH public keys to install.
+    pub ssh_keys: Vec<String>,
 }
 
 /// SSH daemon hardening settings (`[ssh]`).
