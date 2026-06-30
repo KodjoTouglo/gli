@@ -1,0 +1,9 @@
+# vpsguard example configuration.
+# profile: homelab | balanced | strict | paranoid
+profile = "balanced"
+
+[ssh]
+port = 2222
+permit_root_login = false
+password_auth = false
+modern_ciphers = true
