@@ -3,8 +3,9 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::{bail, Context as _, Result};
-use vpsguard_core::{Config, Context, ModuleCatalog, State};
+use color_eyre::eyre::{bail, eyre, Context as _, Result};
+use vpsguard_agent::Auth;
+use vpsguard_core::{Config, Context, Inventory, ModuleCatalog, State};
 use vpsguard_state::{History, DEFAULT_PATH};
 
 mod lockout;
@@ -19,8 +20,87 @@ struct Cli {
     #[arg(short, long, default_value = "vpsguard.toml", global = true)]
     config: PathBuf,
 
+    /// Run against a remote host over SSH (user@host[:port]).
+    #[arg(long, global = true)]
+    target: Option<String>,
+
+    /// Run against all inventory servers carrying this tag.
+    #[arg(long, global = true)]
+    group: Option<String>,
+
+    /// Inventory file used by --group.
+    #[arg(long, global = true, default_value = "inventory.toml")]
+    inventory: PathBuf,
+
+    /// Prompt for the SSH password (otherwise read $VPSGUARD_SSH_PASSWORD).
+    #[arg(long, global = true)]
+    ask_pass: bool,
+
     #[command(subcommand)]
     command: Command,
+}
+
+/// A resolved remote host to act on.
+struct Remote {
+    host: String,
+    port: u16,
+    user: String,
+}
+
+fn parse_target(s: &str) -> Result<Remote> {
+    let (user, rest) = s
+        .split_once('@')
+        .ok_or_else(|| eyre!("target must be user@host[:port]"))?;
+    let (host, port) = match rest.rsplit_once(':') {
+        Some((h, p)) => (h, p.parse().map_err(|_| eyre!("bad port in target"))?),
+        None => (rest, 22u16),
+    };
+    Ok(Remote {
+        host: host.to_string(),
+        port,
+        user: user.to_string(),
+    })
+}
+
+/// Resolve the hosts to act on from --target / --group; empty means local.
+fn resolve_remotes(cli: &Cli) -> Result<Vec<Remote>> {
+    if let Some(t) = &cli.target {
+        return Ok(vec![parse_target(t)?]);
+    }
+    if let Some(group) = &cli.group {
+        let raw = std::fs::read_to_string(&cli.inventory)
+            .with_context(|| format!("reading inventory {}", cli.inventory.display()))?;
+        let inv = Inventory::from_toml(&raw)?;
+        let selected = inv.select(group);
+        if selected.is_empty() {
+            bail!(
+                "no servers match group `{group}` in {}",
+                cli.inventory.display()
+            );
+        }
+        return Ok(selected
+            .into_iter()
+            .map(|(_name, s)| Remote {
+                host: s.host.clone(),
+                port: s.port,
+                user: s.user.clone(),
+            })
+            .collect());
+    }
+    Ok(Vec::new())
+}
+
+fn ssh_auth(ask_pass: bool) -> Result<Auth> {
+    if ask_pass {
+        let p = inquire::Password::new("SSH password:")
+            .without_confirmation()
+            .prompt()?;
+        return Ok(Auth::Password(p));
+    }
+    match std::env::var("VPSGUARD_SSH_PASSWORD") {
+        Ok(p) => Ok(Auth::Password(p)),
+        Err(_) => bail!("set $VPSGUARD_SSH_PASSWORD or pass --ask-pass for remote auth"),
+    }
 }
 
 #[derive(Subcommand)]
@@ -86,30 +166,48 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    match cli.command {
-        Command::Init { force } => cmd_init(&cli.config, force),
-        Command::Plan => cmd_plan(&cli.config).await,
+    match &cli.command {
+        Command::Init { force } => cmd_init(&cli.config, *force),
+        Command::Plan => cmd_plan(&cli).await,
         Command::Apply {
             dry_run,
             yes,
             no_guard,
-        } => cmd_apply(&cli.config, dry_run, yes, no_guard).await,
-        Command::Audit => cmd_audit(&cli.config).await,
+        } => cmd_apply(&cli, *dry_run, *yes, *no_guard).await,
+        Command::Audit => cmd_audit(&cli).await,
         Command::Rollback { module } => cmd_rollback(&cli.config, module.as_deref()).await,
         Command::Recipes => {
             cmd_recipes();
             Ok(())
         }
         Command::History { limit } => {
-            cmd_history(limit);
+            cmd_history(*limit);
             Ok(())
         }
         Command::Guard {
             modules,
             timeout,
             commit,
-        } => cmd_guard(&cli.config, &modules, timeout, &commit).await,
+        } => cmd_guard(&cli.config, modules, *timeout, commit).await,
     }
+}
+
+/// Build the contexts to act on: one local, or one per resolved remote host.
+async fn contexts(cli: &Cli) -> Result<Vec<(String, Context)>> {
+    let config = load_config(&cli.config)?;
+    let remotes = resolve_remotes(cli)?;
+    if remotes.is_empty() {
+        return Ok(vec![("local".to_string(), Context::system(config))]);
+    }
+    let auth = ssh_auth(cli.ask_pass)?;
+    let mut out = Vec::new();
+    for r in remotes {
+        let ctx = vpsguard_agent::remote_context(config.clone(), &r.host, r.port, &r.user, &auth)
+            .await
+            .map_err(|e| eyre!("{e}"))?;
+        out.push((format!("{}@{}:{}", r.user, r.host, r.port), ctx));
+    }
+    Ok(out)
 }
 
 /// Open the history store, best-effort: a warning instead of failing the run.
@@ -154,12 +252,46 @@ async fn cmd_guard(
     Ok(())
 }
 
-fn load(config_path: &PathBuf) -> Result<(Context, ModuleCatalog)> {
+fn load_config(config_path: &PathBuf) -> Result<Config> {
     let raw = std::fs::read_to_string(config_path)
         .with_context(|| format!("reading config {}", config_path.display()))?;
-    let config =
-        Config::resolve(&raw).with_context(|| format!("parsing {}", config_path.display()))?;
-    Ok((Context::system(config), vpsguard_modules::catalog()))
+    Config::resolve(&raw).with_context(|| format!("parsing {}", config_path.display()))
+}
+
+fn load(config_path: &PathBuf) -> Result<(Context, ModuleCatalog)> {
+    Ok((
+        Context::system(load_config(config_path)?),
+        vpsguard_modules::catalog(),
+    ))
+}
+
+async fn run_plan(ctx: &Context, catalog: &ModuleCatalog) -> Result<()> {
+    let mut total = 0;
+    for module in catalog.iter() {
+        let status = module.check(ctx).await?;
+        let changes = pending(module, ctx, &status).await?;
+        total += changes.len();
+        render::module_plan(module, &status, &changes);
+    }
+    render::summary(total);
+    Ok(())
+}
+
+async fn run_audit(ctx: &Context, catalog: &ModuleCatalog) -> Result<()> {
+    let mut compliant = 0;
+    let mut applicable = 0;
+    for module in catalog.iter() {
+        let status = module.check(ctx).await?;
+        if status.state != State::NotApplicable {
+            applicable += 1;
+        }
+        if status.is_compliant() {
+            compliant += 1;
+        }
+        render::audit_line(module, &status);
+    }
+    render::score(compliant, applicable);
+    Ok(())
 }
 
 fn cmd_recipes() {
@@ -182,20 +314,28 @@ fn cmd_init(config_path: &PathBuf, force: bool) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_plan(config_path: &PathBuf) -> Result<()> {
-    let (ctx, catalog) = load(config_path)?;
-    let mut total = 0;
-    for module in catalog.iter() {
-        let status = module.check(&ctx).await?;
-        let changes = pending(module, &ctx, &status).await?;
-        total += changes.len();
-        render::module_plan(module, &status, &changes);
+async fn cmd_plan(cli: &Cli) -> Result<()> {
+    let catalog = vpsguard_modules::catalog();
+    let remote = cli.target.is_some() || cli.group.is_some();
+    for (label, ctx) in contexts(cli).await? {
+        if remote {
+            println!("=== {label} ===");
+        }
+        run_plan(&ctx, &catalog).await?;
+        if remote {
+            println!();
+        }
     }
-    render::summary(total);
     Ok(())
 }
 
-async fn cmd_apply(config_path: &PathBuf, dry_run: bool, yes: bool, no_guard: bool) -> Result<()> {
+async fn cmd_apply(cli: &Cli, dry_run: bool, yes: bool, no_guard: bool) -> Result<()> {
+    if cli.target.is_some() || cli.group.is_some() {
+        bail!(
+            "remote apply is not yet supported; use `plan`/`audit` with --target, or apply locally"
+        );
+    }
+    let config_path = &cli.config;
     let (ctx, catalog) = load(config_path)?;
 
     let mut total = 0;
@@ -260,21 +400,18 @@ async fn cmd_apply(config_path: &PathBuf, dry_run: bool, yes: bool, no_guard: bo
     Ok(())
 }
 
-async fn cmd_audit(config_path: &PathBuf) -> Result<()> {
-    let (ctx, catalog) = load(config_path)?;
-    let mut compliant = 0;
-    let mut applicable = 0;
-    for module in catalog.iter() {
-        let status = module.check(&ctx).await?;
-        if status.state != State::NotApplicable {
-            applicable += 1;
+async fn cmd_audit(cli: &Cli) -> Result<()> {
+    let catalog = vpsguard_modules::catalog();
+    let remote = cli.target.is_some() || cli.group.is_some();
+    for (label, ctx) in contexts(cli).await? {
+        if remote {
+            println!("=== {label} ===");
         }
-        if status.is_compliant() {
-            compliant += 1;
+        run_audit(&ctx, &catalog).await?;
+        if remote {
+            println!();
         }
-        render::audit_line(module, &status);
     }
-    render::score(compliant, applicable);
     Ok(())
 }
 

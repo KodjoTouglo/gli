@@ -15,6 +15,7 @@ rust-version = "1.85"
 vpsguard-core = { path = "crates/vpsguard-core" }
 vpsguard-modules = { path = "crates/vpsguard-modules" }
 vpsguard-state = { path = "crates/vpsguard-state" }
+vpsguard-agent = { path = "crates/vpsguard-agent" }
 
 # Async
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "time"] }
