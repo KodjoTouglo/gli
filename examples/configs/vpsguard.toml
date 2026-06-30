@@ -2,6 +2,11 @@
 # profile: homelab | balanced | strict | paranoid
 profile = "balanced"
 
+[system]
+# hostname = "my-vps"
+# timezone = "Europe/Paris"
+# swap_mb = 2048
+
 [ssh]
 port = 2222
 permit_root_login = false

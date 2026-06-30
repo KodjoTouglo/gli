@@ -11,6 +11,7 @@ mod docker;
 mod fail2ban;
 mod firewall;
 mod ssh;
+mod system;
 mod updates;
 mod users;
 
@@ -19,6 +20,7 @@ pub use docker::DockerModule;
 pub use fail2ban::Fail2banModule;
 pub use firewall::FirewallModule;
 pub use ssh::SshModule;
+pub use system::SystemModule;
 pub use updates::UpdatesModule;
 pub use users::UsersModule;
 
@@ -30,6 +32,7 @@ pub fn catalog() -> ModuleCatalog {
         Box::new(SshModule),
         Box::new(FirewallModule),
         Box::new(UsersModule),
+        Box::new(SystemModule),
         Box::new(UpdatesModule),
         Box::new(Fail2banModule),
         Box::new(DockerModule),

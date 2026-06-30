@@ -33,6 +33,19 @@ pub struct Config {
     pub fail2ban: Fail2banConfig,
     pub docker: DockerConfig,
     pub caddy: CaddyConfig,
+    pub system: SystemConfig,
+}
+
+/// Base system settings (`[system]`): hostname, timezone, swap.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct SystemConfig {
+    /// Static hostname to set.
+    pub hostname: Option<String>,
+    /// Timezone, e.g. "Europe/Paris".
+    pub timezone: Option<String>,
+    /// Swap file size in MiB; None or 0 leaves swap unmanaged.
+    pub swap_mb: Option<u32>,
 }
 
 /// Docker runtime settings (`[docker]`).
