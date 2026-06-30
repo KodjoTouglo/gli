@@ -51,3 +51,11 @@ reverse_proxy = "localhost:8080"
 enabled = false
 # auth_key = "tskey-..."
 ssh = false
+
+# Opt-in databases (disabled by default).
+[postgres]
+enabled = false
+databases = ["myapp"]
+
+[redis]
+enabled = false

@@ -35,6 +35,8 @@ pub struct Config {
     pub caddy: CaddyConfig,
     pub system: SystemConfig,
     pub tailscale: TailscaleConfig,
+    pub postgres: PostgresConfig,
+    pub redis: RedisConfig,
 }
 
 /// Base system settings (`[system]`): hostname, timezone, swap.
@@ -59,6 +61,24 @@ pub struct TailscaleConfig {
     pub auth_key: Option<String>,
     /// Enable Tailscale SSH on this node.
     pub ssh: bool,
+}
+
+/// PostgreSQL settings (`[postgres]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct PostgresConfig {
+    /// Install PostgreSQL and enable its service.
+    pub enabled: bool,
+    /// Databases to create if missing.
+    pub databases: Vec<String>,
+}
+
+/// Redis settings (`[redis]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct RedisConfig {
+    /// Install Redis and enable its service.
+    pub enabled: bool,
 }
 
 /// Docker runtime settings (`[docker]`).
