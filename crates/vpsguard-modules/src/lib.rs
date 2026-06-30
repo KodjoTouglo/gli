@@ -1,10 +1,11 @@
 //! Concrete configuration modules implementing `vpsguard_core::Module`.
 //!
 //! SSH is the reference module; the other modules (users, firewall, updates,
-//! fail2ban, docker) follow the same shape.
+//! fail2ban, docker, caddy) follow the same shape.
 
 #![forbid(unsafe_code)]
 
+mod caddy;
 mod common;
 mod docker;
 mod fail2ban;
@@ -13,6 +14,7 @@ mod ssh;
 mod updates;
 mod users;
 
+pub use caddy::CaddyModule;
 pub use docker::DockerModule;
 pub use fail2ban::Fail2banModule;
 pub use firewall::FirewallModule;
@@ -31,5 +33,6 @@ pub fn catalog() -> ModuleCatalog {
         Box::new(UpdatesModule),
         Box::new(Fail2banModule),
         Box::new(DockerModule),
+        Box::new(CaddyModule),
     ])
 }
