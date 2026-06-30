@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod app;
 mod caddy;
 mod common;
 mod docker;
@@ -18,6 +19,7 @@ mod tailscale;
 mod updates;
 mod users;
 
+pub use app::AppModule;
 pub use caddy::CaddyModule;
 pub use docker::DockerModule;
 pub use fail2ban::Fail2banModule;
@@ -46,5 +48,6 @@ pub fn catalog() -> ModuleCatalog {
         Box::new(TailscaleModule),
         Box::new(PostgresModule),
         Box::new(RedisModule),
+        Box::new(AppModule),
     ])
 }

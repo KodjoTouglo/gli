@@ -59,3 +59,13 @@ databases = ["myapp"]
 
 [redis]
 enabled = false
+
+# Opt-in app deploy (disabled by default).
+[app]
+enabled = false
+framework = "django"   # django | laravel
+runtime = "docker"     # docker | native
+# repo = "https://github.com/me/myapp.git"
+# dir = "/srv/app"
+# domain = "example.com"
+database = "postgres"  # none | postgres | mysql | redis
