@@ -227,6 +227,12 @@ mod tests {
     }
 
     #[test]
+    fn docker_host_recipe_enables_docker() {
+        let c = Config::resolve("recipe = \"docker-host\"").unwrap();
+        assert!(c.docker.enabled);
+    }
+
+    #[test]
     fn user_keys_override_recipe() {
         let raw = "recipe = \"web-server\"\n[firewall]\nallow = [\"8080/tcp\"]\n";
         let c = Config::resolve(raw).unwrap();
