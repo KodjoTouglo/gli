@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/OWNED/hardn"
+authors = ["Kodjo Michel TOUGLO"]
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Internal crates
+vpsguard-core = { path = "crates/vpsguard-core" }
+vpsguard-modules = { path = "crates/vpsguard-modules" }
+
+# Async
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "time"] }
+async-trait = "0.1"
+
+# Config / serde
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Errors / logging
+thiserror = "2"
+color-eyre = "0.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1

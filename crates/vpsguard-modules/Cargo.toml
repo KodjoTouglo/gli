@@ -1,0 +1,19 @@
+[package]
+name = "vpsguard-modules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Hardening modules for vpsguard (ssh, users, firewall, updates, fail2ban)."
+
+[dependencies]
+vpsguard-core.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["fs", "process"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "fs"] }
+tempfile = "3"
