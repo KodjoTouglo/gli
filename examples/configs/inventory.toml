@@ -1,0 +1,13 @@
+# vpsguard inventory: remote servers for --group / --target.
+# Select one by name (--group web1) or a tag group (--group web).
+
+[servers.web1]
+host = "10.0.0.1"
+user = "root"
+tags = ["web", "prod"]
+
+[servers.web2]
+host = "10.0.0.2"
+port = 2222
+user = "deploy"
+tags = ["web"]
