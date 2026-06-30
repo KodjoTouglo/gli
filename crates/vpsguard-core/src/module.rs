@@ -5,13 +5,20 @@ use async_trait::async_trait;
 use crate::{Change, Context, Report, Result, Status};
 
 /// Grouping for ordering and UI. Security modules form the always-on baseline.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Category {
     Security,
     System,
     Runtime,
     Network,
     App,
+}
+
+impl Category {
+    /// Plan/dashboard ordering: security baseline first.
+    pub fn rank(self) -> u8 {
+        self as u8
+    }
 }
 
 /// A unit of configuration: ssh, firewall, docker, ssl, app deploy.

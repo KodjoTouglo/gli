@@ -70,8 +70,9 @@ async fn plan(config_path: &PathBuf) -> Result<()> {
     let config = load_config(config_path)?;
     let ctx = Context::system(config);
 
+    let catalog = vpsguard_modules::catalog();
     let mut total = 0usize;
-    for module in vpsguard_modules::all() {
+    for module in catalog.iter() {
         let status = module.check(&ctx).await?;
         let changes = if status.state == State::Drift {
             module.plan(&ctx).await?
@@ -79,7 +80,7 @@ async fn plan(config_path: &PathBuf) -> Result<()> {
             Vec::new()
         };
         total += changes.len();
-        render::module_plan(module.as_ref(), &status, &changes);
+        render::module_plan(module, &status, &changes);
     }
 
     render::summary(total);

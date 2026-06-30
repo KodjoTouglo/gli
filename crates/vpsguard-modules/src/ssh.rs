@@ -4,7 +4,7 @@
 //! modern Ciphers/KexAlgorithms/MACs set. A rewritten config is validated with
 //! `sshd -t` before it replaces the live file, the daemon is restarted only on
 //! success, and the previous file is snapshotted for rollback. Full lockout
-//! protection (connectivity probe + timed auto-rollback) lands in a later phase.
+//! protection (connectivity probe + timed auto-rollback) is not yet implemented.
 
 use async_trait::async_trait;
 

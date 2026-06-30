@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod catalog;
 mod config;
 mod context;
 mod error;
@@ -12,6 +13,7 @@ mod module;
 mod runner;
 mod types;
 
+pub use catalog::ModuleCatalog;
 pub use config::{Config, Profile, SshConfig};
 pub use context::Context;
 pub use error::{Error, Result};
