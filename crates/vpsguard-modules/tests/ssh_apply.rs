@@ -6,7 +6,8 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use vpsguard_core::{
-    CommandRunner, Config, Context, Module, Output, Profile, Result, SshConfig, State,
+    CommandRunner, Config, Context, DistroFamily, Module, Output, Platform, Profile, Result,
+    SshConfig, State,
 };
 use vpsguard_modules::SshModule;
 
@@ -85,6 +86,20 @@ async fn apply_rewrites_validates_and_restarts() {
 
     // Now compliant.
     assert!(module.check(&ctx).await.unwrap().is_compliant());
+}
+
+#[tokio::test]
+async fn rhel_restarts_sshd_not_ssh() {
+    let tmp = tempfile::tempdir().unwrap();
+    write_sshd(tmp.path(), "Port 22\n").await;
+    let runner = Arc::new(MockRunner::default());
+    let ctx = Context::with_parts(config(), tmp.path().to_path_buf(), runner.clone())
+        .with_platform(Platform::of(DistroFamily::Rhel));
+
+    SshModule.apply(&ctx, false).await.unwrap();
+    let calls = runner.calls.lock().unwrap().clone();
+    assert!(calls.iter().any(|c| c.contains("systemctl restart sshd")));
+    assert!(!calls.iter().any(|c| c.contains("systemctl restart ssh ")));
 }
 
 #[tokio::test]
