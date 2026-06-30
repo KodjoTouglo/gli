@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{bail, eyre, Context as _, Result};
-use vpsguard_agent::Auth;
+use vpsguard_agent::{default_known_hosts, Auth, ConnectOpts, HostKeyPolicy};
 use vpsguard_core::{Config, Context, Inventory, ModuleCatalog, State};
 use vpsguard_state::{History, DEFAULT_PATH};
 
@@ -35,6 +35,22 @@ struct Cli {
     /// Prompt for the SSH password (otherwise read $VPSGUARD_SSH_PASSWORD).
     #[arg(long, global = true)]
     ask_pass: bool,
+
+    /// SSH private key file for remote auth.
+    #[arg(short = 'i', long, global = true)]
+    identity: Option<PathBuf>,
+
+    /// known_hosts file for host-key verification.
+    #[arg(long, global = true)]
+    known_hosts: Option<PathBuf>,
+
+    /// Only accept host keys already in known_hosts.
+    #[arg(long, global = true)]
+    strict_host_key: bool,
+
+    /// Accept any host key without checking (insecure; testing only).
+    #[arg(long, global = true)]
+    insecure_host_key: bool,
 
     #[command(subcommand)]
     command: Command,
@@ -90,17 +106,53 @@ fn resolve_remotes(cli: &Cli) -> Result<Vec<Remote>> {
     Ok(Vec::new())
 }
 
-fn ssh_auth(ask_pass: bool) -> Result<Auth> {
-    if ask_pass {
-        let p = inquire::Password::new("SSH password:")
-            .without_confirmation()
-            .prompt()?;
-        return Ok(Auth::Password(p));
-    }
-    match std::env::var("VPSGUARD_SSH_PASSWORD") {
-        Ok(p) => Ok(Auth::Password(p)),
-        Err(_) => bail!("set $VPSGUARD_SSH_PASSWORD or pass --ask-pass for remote auth"),
-    }
+/// Pick the first existing default SSH key.
+fn default_key() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    ["id_ed25519", "id_rsa"]
+        .iter()
+        .map(|n| PathBuf::from(&home).join(".ssh").join(n))
+        .find(|p| p.exists())
+}
+
+/// Resolve SSH connection options: auth (identity > password > default key) and
+/// host-key policy (TOFU by default).
+fn connect_opts(cli: &Cli) -> Result<ConnectOpts> {
+    let auth = if let Some(id) = &cli.identity {
+        Auth::Key {
+            path: id.clone(),
+            passphrase: None,
+        }
+    } else if cli.ask_pass {
+        Auth::Password(
+            inquire::Password::new("SSH password:")
+                .without_confirmation()
+                .prompt()?,
+        )
+    } else if let Ok(p) = std::env::var("VPSGUARD_SSH_PASSWORD") {
+        Auth::Password(p)
+    } else if let Some(key) = default_key() {
+        Auth::Key {
+            path: key,
+            passphrase: None,
+        }
+    } else {
+        bail!("no SSH auth: pass --identity <key>, --ask-pass, set $VPSGUARD_SSH_PASSWORD, or have a default key");
+    };
+
+    let host_key = if cli.insecure_host_key {
+        HostKeyPolicy::AcceptAny
+    } else if cli.strict_host_key {
+        HostKeyPolicy::Strict
+    } else {
+        HostKeyPolicy::Tofu
+    };
+
+    Ok(ConnectOpts {
+        auth,
+        host_key,
+        known_hosts: cli.known_hosts.clone().unwrap_or_else(default_known_hosts),
+    })
 }
 
 #[derive(Subcommand)]
@@ -199,10 +251,10 @@ async fn contexts(cli: &Cli) -> Result<Vec<(String, Context)>> {
     if remotes.is_empty() {
         return Ok(vec![("local".to_string(), Context::system(config))]);
     }
-    let auth = ssh_auth(cli.ask_pass)?;
+    let opts = connect_opts(cli)?;
     let mut out = Vec::new();
     for r in remotes {
-        let ctx = vpsguard_agent::remote_context(config.clone(), &r.host, r.port, &r.user, &auth)
+        let ctx = vpsguard_agent::remote_context(config.clone(), &r.host, r.port, &r.user, &opts)
             .await
             .map_err(|e| eyre!("{e}"))?;
         out.push((format!("{}@{}:{}", r.user, r.host, r.port), ctx));
