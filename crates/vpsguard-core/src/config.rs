@@ -33,6 +33,56 @@ pub struct Config {
     pub fail2ban: Fail2banConfig,
     pub docker: DockerConfig,
     pub caddy: CaddyConfig,
+    pub app: AppConfig,
+}
+
+/// Web framework an app uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Framework {
+    #[default]
+    Django,
+    Laravel,
+}
+
+/// How the app is run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AppRuntime {
+    #[default]
+    Docker,
+    Native,
+}
+
+/// Database the app is wired to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AppDatabase {
+    #[default]
+    None,
+    Postgres,
+    Mysql,
+    Redis,
+}
+
+/// Application deploy settings (`[app]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct AppConfig {
+    /// Deploy the app.
+    pub enabled: bool,
+    /// Web framework.
+    pub framework: Framework,
+    /// How to run it (docker compose or native).
+    pub runtime: AppRuntime,
+    /// Git repository to deploy.
+    pub repo: Option<String>,
+    /// Checkout directory (default /srv/app).
+    pub dir: Option<String>,
+    /// Public domain (for reverse proxy).
+    pub domain: Option<String>,
+    /// Database to use.
+    pub database: AppDatabase,
 }
 
 /// Docker runtime settings (`[docker]`).

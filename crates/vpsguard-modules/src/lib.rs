@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod app;
 mod caddy;
 mod common;
 mod docker;
@@ -14,6 +15,7 @@ mod ssh;
 mod updates;
 mod users;
 
+pub use app::AppModule;
 pub use caddy::CaddyModule;
 pub use docker::DockerModule;
 pub use fail2ban::Fail2banModule;
@@ -34,5 +36,6 @@ pub fn catalog() -> ModuleCatalog {
         Box::new(Fail2banModule),
         Box::new(DockerModule),
         Box::new(CaddyModule),
+        Box::new(AppModule),
     ])
 }
