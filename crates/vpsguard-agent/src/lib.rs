@@ -6,6 +6,8 @@
 //! IO uses small shell commands (cat / base64 / mv / rm / test), so no agent or
 //! SFTP subsystem is required on the target. All interpolated values are
 //! single-quote escaped by `quote`.
+//!
+//! Host keys are verified against known_hosts (trust-on-first-use by default).
 
 #![forbid(unsafe_code)]
 
@@ -14,6 +16,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use base64::Engine;
+use russh::keys::key::PublicKey;
 use russh::{client, ChannelMsg};
 use tokio::sync::Mutex;
 use vpsguard_core::{
@@ -32,44 +35,110 @@ pub enum Error {
 
     #[error("authentication failed for {user}@{host}")]
     Auth { user: String, host: String },
+
+    #[error("loading key {path}: {source}")]
+    Key {
+        path: String,
+        #[source]
+        source: russh::keys::Error,
+    },
 }
 
 /// How to authenticate to a host.
 #[derive(Debug, Clone)]
 pub enum Auth {
     Password(String),
+    Key {
+        path: PathBuf,
+        passphrase: Option<String>,
+    },
+}
+
+/// What to do with the server's host key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HostKeyPolicy {
+    /// Trust on first use: accept and record unknown keys, reject changed ones.
+    #[default]
+    Tofu,
+    /// Only accept keys already present in known_hosts.
+    Strict,
+    /// Accept any key without checking (insecure; testing only).
+    AcceptAny,
+}
+
+/// Connection options.
+#[derive(Debug, Clone)]
+pub struct ConnectOpts {
+    pub auth: Auth,
+    pub host_key: HostKeyPolicy,
+    pub known_hosts: PathBuf,
+}
+
+impl ConnectOpts {
+    pub fn new(auth: Auth) -> Self {
+        Self {
+            auth,
+            host_key: HostKeyPolicy::default(),
+            known_hosts: default_known_hosts(),
+        }
+    }
+}
+
+/// Default `~/.ssh/known_hosts` path.
+pub fn default_known_hosts() -> PathBuf {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .unwrap_or_default();
+    home.join(".ssh").join("known_hosts")
 }
 
 /// An open SSH session.
 pub struct SshConn {
-    handle: Mutex<client::Handle<AcceptAllKeys>>,
+    handle: Mutex<client::Handle<Verifier>>,
 }
 
 impl SshConn {
-    /// Connect and authenticate.
+    /// Connect, verify the host key, and authenticate.
     pub async fn connect(
         host: &str,
         port: u16,
         user: &str,
-        auth: &Auth,
+        opts: &ConnectOpts,
     ) -> Result<Arc<Self>, Error> {
         let config = Arc::new(client::Config::default());
-        let mut handle = client::connect(config, (host, port), AcceptAllKeys)
-            .await
-            .map_err(|e| Error::Connect {
-                target: format!("{host}:{port}"),
-                source: e,
-            })?;
+        let verifier = Verifier {
+            host: host.to_string(),
+            port,
+            policy: opts.host_key,
+            known_hosts: opts.known_hosts.clone(),
+        };
+        let connect_err = |e: russh::Error| Error::Connect {
+            target: format!("{host}:{port}"),
+            source: e,
+        };
 
-        let ok = match auth {
-            Auth::Password(p) => {
+        let mut handle = client::connect(config, (host, port), verifier)
+            .await
+            .map_err(connect_err)?;
+
+        let ok = match &opts.auth {
+            Auth::Password(p) => handle
+                .authenticate_password(user, p)
+                .await
+                .map_err(connect_err)?,
+            Auth::Key { path, passphrase } => {
+                let key =
+                    russh::keys::load_secret_key(path, passphrase.as_deref()).map_err(|e| {
+                        Error::Key {
+                            path: path.display().to_string(),
+                            source: e,
+                        }
+                    })?;
                 handle
-                    .authenticate_password(user, p)
+                    .authenticate_publickey(user, Arc::new(key))
                     .await
-                    .map_err(|e| Error::Connect {
-                        target: format!("{host}:{port}"),
-                        source: e,
-                    })?
+                    .map_err(connect_err)?
             }
         };
         if !ok {
@@ -130,18 +199,61 @@ impl SshConn {
     }
 }
 
-/// Accepts any host key (trust-on-first-use is not yet implemented).
-pub struct AcceptAllKeys;
+/// Verifies the server host key against known_hosts per the policy.
+pub struct Verifier {
+    host: String,
+    port: u16,
+    policy: HostKeyPolicy,
+    known_hosts: PathBuf,
+}
 
 #[async_trait]
-impl client::Handler for AcceptAllKeys {
+impl client::Handler for Verifier {
     type Error = russh::Error;
 
-    async fn check_server_key(
-        &mut self,
-        _server_public_key: &russh::keys::key::PublicKey,
-    ) -> Result<bool, Self::Error> {
-        Ok(true)
+    async fn check_server_key(&mut self, key: &PublicKey) -> Result<bool, Self::Error> {
+        if self.policy == HostKeyPolicy::AcceptAny {
+            return Ok(true);
+        }
+        match russh::keys::check_known_hosts_path(&self.host, self.port, key, &self.known_hosts) {
+            Ok(true) => Ok(true),
+            Ok(false) => match self.policy {
+                HostKeyPolicy::Tofu => {
+                    match russh::keys::learn_known_hosts_path(
+                        &self.host,
+                        self.port,
+                        key,
+                        &self.known_hosts,
+                    ) {
+                        Ok(()) => eprintln!("note: trusting new host key for {}", self.host),
+                        Err(e) => {
+                            eprintln!("warning: could not record host key for {}: {e}", self.host)
+                        }
+                    }
+                    Ok(true)
+                }
+                HostKeyPolicy::Strict => {
+                    eprintln!("error: {} not in known_hosts (strict mode)", self.host);
+                    Ok(false)
+                }
+                HostKeyPolicy::AcceptAny => Ok(true),
+            },
+            Err(russh::keys::Error::KeyChanged { line }) => {
+                eprintln!(
+                    "SECURITY: host key for {} changed (known_hosts line {line}); \
+                     refusing connection (possible man-in-the-middle)",
+                    self.host
+                );
+                Ok(false)
+            }
+            Err(e) => {
+                eprintln!(
+                    "warning: host key check failed for {}: {e}; refusing",
+                    self.host
+                );
+                Ok(false)
+            }
+        }
     }
 }
 
@@ -224,9 +336,9 @@ pub async fn remote_context(
     host: &str,
     port: u16,
     user: &str,
-    auth: &Auth,
+    opts: &ConnectOpts,
 ) -> Result<Context, Error> {
-    let conn = SshConn::connect(host, port, user, auth).await?;
+    let conn = SshConn::connect(host, port, user, opts).await?;
     let platform = conn.detect_platform().await;
     let runner = Arc::new(RemoteRunner { conn: conn.clone() });
     let fs = Arc::new(RemoteFs { conn });
