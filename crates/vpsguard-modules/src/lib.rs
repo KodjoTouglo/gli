@@ -6,11 +6,13 @@
 #![forbid(unsafe_code)]
 
 mod common;
+mod fail2ban;
 mod firewall;
 mod ssh;
 mod updates;
 mod users;
 
+pub use fail2ban::Fail2banModule;
 pub use firewall::FirewallModule;
 pub use ssh::SshModule;
 pub use updates::UpdatesModule;
@@ -25,5 +27,6 @@ pub fn catalog() -> ModuleCatalog {
         Box::new(FirewallModule),
         Box::new(UsersModule),
         Box::new(UpdatesModule),
+        Box::new(Fail2banModule),
     ])
 }

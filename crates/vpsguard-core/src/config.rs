@@ -28,6 +28,32 @@ pub struct Config {
     /// Managed users, keyed by username (`[users.deploy]`).
     pub users: BTreeMap<String, UserConfig>,
     pub updates: UpdatesConfig,
+    pub fail2ban: Fail2banConfig,
+}
+
+/// fail2ban settings (`[fail2ban]`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Fail2banConfig {
+    /// Install and enable fail2ban.
+    pub enabled: bool,
+    /// Jails to enable, e.g. ["sshd"].
+    pub jails: Vec<String>,
+    /// Ban duration (fail2ban syntax, e.g. "10m"); None uses fail2ban default.
+    pub bantime: Option<String>,
+    /// Failures before a ban; None uses fail2ban default.
+    pub maxretry: Option<u32>,
+}
+
+impl Default for Fail2banConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            jails: vec!["sshd".to_string()],
+            bantime: None,
+            maxretry: None,
+        }
+    }
 }
 
 /// Automatic update settings (`[updates]`).
