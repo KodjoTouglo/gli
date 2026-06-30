@@ -15,7 +15,14 @@ path = "src/main.rs"
 [dependencies]
 vpsguard-core.workspace = true
 vpsguard-modules.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "process",
+    "io-util",
+    "io-std",
+] }
 clap.workspace = true
 inquire.workspace = true
 color-eyre.workspace = true
