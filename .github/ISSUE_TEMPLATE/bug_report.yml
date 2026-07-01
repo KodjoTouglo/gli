@@ -1,0 +1,39 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: ["type: bug", "needs triage"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The command you ran and the relevant part of your vpsguard.toml.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: vpsguard version
+      description: Output of `vpsguard --version`.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Target OS
+      description: Distribution and version (from /etc/os-release), and whether local or remote.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: Relevant command output or error. Redact secrets and hostnames.
+      render: shell
