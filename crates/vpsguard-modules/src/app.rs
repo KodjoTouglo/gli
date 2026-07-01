@@ -190,6 +190,8 @@ fn framework_name(f: Framework) -> &'static str {
         Framework::Rails => "Rails",
         Framework::Generic => "Generic",
         Framework::Static => "Static",
+        Framework::Php => "PHP",
+        Framework::Wordpress => "WordPress",
     }
 }
 

@@ -122,6 +122,10 @@ pub enum Framework {
     Generic,
     /// Static site served by Caddy (no application runtime).
     Static,
+    /// Plain PHP app (php-fpm).
+    Php,
+    /// WordPress (PHP CMS).
+    Wordpress,
 }
 
 /// How the app is run.
@@ -160,6 +164,8 @@ pub struct AppConfig {
     pub dir: Option<String>,
     /// Public domain (for reverse proxy).
     pub domain: Option<String>,
+    /// Port the app listens on (for the reverse proxy). Defaults per framework.
+    pub port: Option<u16>,
     /// Database to use.
     pub database: AppDatabase,
 }
@@ -345,9 +351,56 @@ impl Config {
             None => user,
         };
 
-        merged
+        let mut config: Config = merged
             .try_into()
-            .map_err(|e: toml::de::Error| crate::Error::Config(e.to_string()))
+            .map_err(|e: toml::de::Error| crate::Error::Config(e.to_string()))?;
+        config.wire();
+        Ok(config)
+    }
+
+    /// Derive cross-module settings from the app config: a Caddy site for the
+    /// app's domain and the database module it depends on. Idempotent.
+    pub fn wire(&mut self) {
+        if !self.app.enabled {
+            return;
+        }
+        if let Some(domain) = self.app.domain.clone() {
+            self.caddy.enabled = true;
+            if !self.caddy.sites.iter().any(|s| s.domain == domain) {
+                let site = if self.app.framework == Framework::Static {
+                    CaddySite {
+                        domain,
+                        reverse_proxy: None,
+                        root: Some(self.app.dir.clone().unwrap_or_else(|| "/srv/app".into())),
+                    }
+                } else {
+                    let port = self
+                        .app
+                        .port
+                        .unwrap_or_else(|| default_port(self.app.framework));
+                    CaddySite {
+                        domain,
+                        reverse_proxy: Some(format!("localhost:{port}")),
+                        root: None,
+                    }
+                };
+                self.caddy.sites.push(site);
+            }
+        }
+        match self.app.database {
+            AppDatabase::Postgres => self.postgres.enabled = true,
+            AppDatabase::Redis => self.redis.enabled = true,
+            AppDatabase::Mysql | AppDatabase::None => {}
+        }
+    }
+}
+
+/// Default listening port per framework, used to wire the reverse proxy.
+fn default_port(f: Framework) -> u16 {
+    match f {
+        Framework::Node | Framework::Rails => 3000,
+        Framework::Php | Framework::Wordpress | Framework::Generic => 8080,
+        _ => 8000,
     }
 }
 
@@ -376,6 +429,55 @@ mod tests {
     fn recipe_presets_apply() {
         let c = Config::resolve("recipe = \"web-server\"").unwrap();
         assert_eq!(c.firewall.allow, vec!["80/tcp", "443/tcp"]);
+    }
+
+    #[test]
+    fn app_domain_wires_a_caddy_site() {
+        let raw = "[app]\nenabled = true\ndomain = \"example.com\"\nport = 3000\n";
+        let c = Config::resolve(raw).unwrap();
+        assert!(c.caddy.enabled);
+        let site = c
+            .caddy
+            .sites
+            .iter()
+            .find(|s| s.domain == "example.com")
+            .unwrap();
+        assert_eq!(site.reverse_proxy.as_deref(), Some("localhost:3000"));
+    }
+
+    #[test]
+    fn app_static_wires_a_file_server_site() {
+        let raw = "[app]\nenabled = true\nframework = \"static\"\ndomain = \"s.example.com\"\ndir = \"/srv/site\"\n";
+        let c = Config::resolve(raw).unwrap();
+        let site = c
+            .caddy
+            .sites
+            .iter()
+            .find(|s| s.domain == "s.example.com")
+            .unwrap();
+        assert_eq!(site.root.as_deref(), Some("/srv/site"));
+        assert!(site.reverse_proxy.is_none());
+    }
+
+    #[test]
+    fn app_database_enables_the_db_module() {
+        let pg = Config::resolve("[app]\nenabled = true\ndatabase = \"postgres\"\n").unwrap();
+        assert!(pg.postgres.enabled);
+        let rd = Config::resolve("[app]\nenabled = true\ndatabase = \"redis\"\n").unwrap();
+        assert!(rd.redis.enabled);
+    }
+
+    #[test]
+    fn wiring_skipped_when_app_disabled() {
+        let c = Config::resolve("[app]\nenabled = false\ndomain = \"x.com\"\n").unwrap();
+        assert!(!c.caddy.enabled);
+    }
+
+    #[test]
+    fn default_ports_per_framework() {
+        assert_eq!(default_port(Framework::Node), 3000);
+        assert_eq!(default_port(Framework::Django), 8000);
+        assert_eq!(default_port(Framework::Php), 8080);
     }
 
     #[test]
