@@ -2419,7 +2419,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpsguard-agent"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "async-trait",
  "base64",
@@ -2432,7 +2432,7 @@ dependencies = [
 
 [[package]]
 name = "vpsguard-cli"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "clap",
  "color-eyre",
@@ -2451,7 +2451,7 @@ dependencies = [
 
 [[package]]
 name = "vpsguard-core"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "async-trait",
  "serde",
@@ -2464,7 +2464,7 @@ dependencies = [
 
 [[package]]
 name = "vpsguard-modules"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "async-trait",
  "tempfile",
@@ -2475,7 +2475,7 @@ dependencies = [
 
 [[package]]
 name = "vpsguard-state"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "rusqlite",
  "thiserror 2.0.18",
@@ -2483,7 +2483,7 @@ dependencies = [
 
 [[package]]
 name = "vpsguard-tui"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "crossterm 0.28.1",
  "futures",
