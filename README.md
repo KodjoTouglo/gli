@@ -1,37 +1,31 @@
 # vpsguard
 
-Configure and secure a fresh Linux VPS in one command.
+Configure, secure, and provision a Linux VPS from one declarative file.
 
-vpsguard is a single static Rust binary that hardens and provisions a server
-from a declarative `vpsguard.toml`. Every change is idempotent, previewed before
-it runs, and reversible. It targets the gap left by fragile bash scripts (no
-safety, no idempotence), Ansible (too heavy for one box), and PaaS tools like
-Coolify (deploy apps but don't secure the OS).
+vpsguard is a single static Rust binary that hardens and sets up a server from a
+declarative `vpsguard.toml`. Every change is idempotent, previewed before it
+runs, and reversible. It fills the gap left by fragile bash scripts (no safety,
+no idempotence), Ansible (too heavy for one box), and PaaS tools like Coolify
+(deploy apps but don't secure the OS).
 
-> Status: MVP. Local execution against Debian/Ubuntu, Fedora, Rocky/RHEL,
-> Arch, and openSUSE. Remote (agentless) execution and a TUI are on the roadmap.
+Runs locally or over SSH against one host or a tagged fleet. Works on
+Debian/Ubuntu, Fedora, Rocky/RHEL, Arch, and openSUSE.
 
 ## Why
 
-When you rent a new VPS there is a pile of setup to do before it is safe or
-useful: lock down SSH, put up a firewall, create a deploy user, turn on
-automatic updates, add fail2ban, install Docker. vpsguard does all of it from
-one config file, safely and repeatably.
+When you rent a new VPS there is a pile of setup before it is safe or useful:
+lock down SSH, put up a firewall, create a deploy user, enable automatic
+updates, add fail2ban, install Docker, deploy an app with HTTPS, add monitoring.
+vpsguard does all of it from one config file, safely and repeatably.
 
 ## Principles
 
-- **Idempotent** — every action can be re-run any number of times with no side
-  effects once converged.
-- **Preview first** — `plan` shows the diff; `apply` asks for confirmation
-  before touching anything.
-- **Reversible** — each module snapshots state before changing it and supports
-  `rollback`.
-- **Lockout-safe** — risky changes are validated before they take effect (SSH
-  config with `sshd -t`, firewall ruleset with `nft -c`), and the firewall
-  always keeps the SSH port open.
-- **Single binary** — no Python or Ruby on the target.
-- **Cross-distro** — detects the host and adapts service names and package
-  managers.
+- **Idempotent**: every action re-runs with no side effects once converged.
+- **Preview first**: `plan` shows the diff; `apply` confirms before touching anything.
+- **Reversible**: each module snapshots state and supports `rollback` and `uninstall`.
+- **Lockout-safe**: SSH and firewall changes are validated (`sshd -t`, `nft -c`) and, after an interactive apply, a detached guard auto-rolls-back within 60s unless you confirm.
+- **Single binary**: no Python or Ruby on the target.
+- **Cross-distro**: detects the host and adapts service names and package managers.
 
 ## Install
 
@@ -43,58 +37,22 @@ curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/hardn/develop/install.s
 
 Windows: download the `.zip` from the [Releases](https://github.com/KodjoTouglo/hardn/releases) page.
 
-With Cargo:
+With Cargo, or from source (Rust 1.85+):
 
 ```sh
 cargo install --git https://github.com/KodjoTouglo/hardn vpsguard-cli
-```
-
-From source (Rust 1.85+):
-
-```sh
-git clone https://github.com/KodjoTouglo/hardn.git
-cd hardn
+# or
+git clone https://github.com/KodjoTouglo/hardn.git && cd hardn
 cargo build --release --bin vpsguard
-# binary at target/release/vpsguard
 ```
-
-Tagged releases (`v*`) publish prebuilt binaries and checksums via GitHub
-Actions. Homebrew, winget, npm, and PyPI packages that wrap these artifacts are
-planned.
 
 ## Quickstart
 
 ```sh
-# 1. Write a starter config
-vpsguard init
-
-# 2. Preview the changes (read-only)
-vpsguard plan
-
-# 3. Apply them (asks for confirmation; use --yes to skip)
-sudo vpsguard apply
-
-# Or preview an apply without changing anything
-sudo vpsguard apply --dry-run
-```
-
-Example `plan` output:
-
-```
-[~] ssh (Harden sshd: custom port, no root/password login, modern crypto)
-    ~ Port: (unset) -> 2222
-    ~ PermitRootLogin: (unset) -> no
-    ~ PasswordAuthentication: (unset) -> no
-[~] firewall (nftables: default-deny input, allow listed ports, SSH protected)
-    + input policy drop
-    + allow 2222/tcp (ssh lockout guard)
-    + allow 80/tcp
-    + allow 443/tcp
-[~] users (Create users, grant sudo via sudoers.d, install SSH keys)
-    + create user deploy
-    + grant sudo to deploy
-
-9 changes pending. Run `vpsguard apply` to converge.
+vpsguard init            # write a starter vpsguard.toml
+vpsguard plan            # preview the changes (read-only)
+sudo vpsguard apply      # apply, with confirmation
+vpsguard tui             # or drive it all from the dashboard
 ```
 
 ## Commands
@@ -103,28 +61,43 @@ Example `plan` output:
 |---|---|
 | `init` | Write a starter `vpsguard.toml` (`--force` to overwrite) |
 | `plan` | Show the changes `apply` would make (read-only) |
-| `apply` | Converge the system (`--dry-run`, `--yes`) |
-| `audit` | Report per-module compliance and a security score |
+| `apply` | Converge the system (`--dry-run`, `--yes`, `--no-guard`) |
+| `audit` | Per-module compliance and a score (`--json` for machine output) |
 | `rollback [module]` | Restore state from before the last apply |
+| `uninstall [module]` | Remove modules; `--purge` also deletes data |
 | `recipes` | List the builtin recipes |
+| `servers [group]` | List inventory servers (`--check` probes SSH) |
+| `history` | Show recent apply/rollback/uninstall events |
+| `tui` | Launch the interactive dashboard |
+
+Global flags select the target: `--target user@host[:port]`, `--group <tag>`
+with `--inventory`, plus SSH auth (`--identity`, `--ask-pass`,
+`$VPSGUARD_SSH_PASSWORD`) and host-key policy (`--strict-host-key`,
+`--insecure-host-key`, `--known-hosts`).
 
 ## Modules
 
 | Module | Category | What it does |
 |---|---|---|
-| `ssh` | Security | Custom port, disable root/password login, modern ciphers; validated with `sshd -t` |
-| `firewall` | Security | nftables default-deny input, allow-list, SSH always permitted |
+| `ssh` | Security | Custom port, disable root/password login, modern ciphers |
+| `firewall` | Security | nftables default-deny, allow-list, SSH always permitted |
 | `users` | Security | Create users, grant sudo via `sudoers.d`, install SSH keys |
-| `updates` | System | Automatic security updates (unattended-upgrades / dnf-automatic) |
 | `fail2ban` | Security | Install fail2ban, enable jails (sshd tracks the SSH port) |
-| `docker` | Runtime | Install Docker, enable the service, add users to the docker group (opt-in) |
+| `system` | System | Set hostname, timezone, and a swap file |
+| `updates` | System | Automatic security updates (unattended-upgrades / dnf-automatic) |
+| `monitoring` | System | Metrics agent: netdata dashboard or Prometheus node_exporter |
+| `docker` | Runtime | Install Docker, enable it, add users to the docker group |
+| `postgres` | Runtime | Install PostgreSQL, enable it, create databases |
+| `redis` | Runtime | Install Redis and enable it |
+| `caddy` | Network | Reverse proxy with automatic HTTPS (Let's Encrypt) |
+| `tailscale` | Network | Install Tailscale and join the tailnet |
+| `app` | App | Deploy an app (Django, Laravel, Node, WordPress, ...) |
 
-Security modules form an always-on baseline; provisioning modules like `docker`
-are opt-in.
+Security modules form an always-on baseline; provisioning modules are opt-in.
 
 ## Configuration
 
-`vpsguard.toml`:
+`vpsguard.toml` (excerpt; see [examples/configs/vpsguard.toml](examples/configs/vpsguard.toml)):
 
 ```toml
 profile = "balanced"   # homelab | balanced | strict | paranoid
@@ -133,11 +106,8 @@ profile = "balanced"   # homelab | balanced | strict | paranoid
 port = 2222
 permit_root_login = false
 password_auth = false
-modern_ciphers = true
 
 [firewall]
-enabled = true
-backend = "nftables"
 default = "deny"
 allow = ["80/tcp", "443/tcp", "22/tcp from 10.0.0.0/8"]
 
@@ -145,53 +115,48 @@ allow = ["80/tcp", "443/tcp", "22/tcp from 10.0.0.0/8"]
 sudo = true
 ssh_keys = ["ssh-ed25519 AAAA... deploy@host"]
 
-[updates]
+[monitoring]
 enabled = true
-auto_reboot = "02:00"
+backend = "netdata"    # netdata | node_exporter
 
-[fail2ban]
+[app]
 enabled = true
-jails = ["sshd"]
-bantime = "10m"
-maxretry = 5
-
-# Opt-in provisioning
-[docker]
-enabled = false
-users = ["deploy"]
+framework = "django"   # django|laravel|node|fastapi|rails|php|wordpress|generic|static
+domain = "app.example.com"   # auto-creates a Caddy HTTPS site
+database = "postgres"        # auto-enables the postgres module
+repo = "https://github.com/me/myapp.git"
 ```
+
+Setting `app.domain` wires a Caddy reverse-proxy site with HTTPS; setting
+`app.database` enables the matching database module. One `[app]` block sets up
+the app, its HTTPS front, and its database.
 
 ### Recipes
 
-A recipe is a named preset. Set `recipe = "<name>"` and your own keys are
-layered on top (your values win, unspecified keys inherit the preset):
+A recipe is a named preset; your own keys layer on top (yours win):
 
 ```toml
-recipe = "web-server"
+recipe = "wordpress"
 
-[ssh]
-port = 2222          # override the preset's default
+[app]
+domain = "blog.example.com"
 ```
+
+`vpsguard apply` then stands up a full WordPress + MariaDB stack behind
+automatic HTTPS. Builtin: `baseline`, `web-server`, `docker-host`, `wordpress`
+(`vpsguard recipes`).
+
+## Remote and fleets
 
 ```sh
-vpsguard recipes      # list builtin recipes
+vpsguard plan --target root@203.0.113.10           # one host, read-only
+vpsguard audit --group prod --json | jq            # a tagged fleet, as JSON
+vpsguard servers --check                           # inventory + connectivity
 ```
 
-Builtin: `baseline` (SSH hardening, default-deny firewall, fail2ban,
-auto-updates) and `web-server` (baseline plus inbound 80/443).
-
-## Cross-distro support
-
-vpsguard reads `/etc/os-release` and adapts:
-
-| Family | SSH service | Package manager |
-|---|---|---|
-| Debian/Ubuntu | `ssh` | `apt-get` |
-| Fedora/Rocky/RHEL | `sshd` | `dnf` |
-| Arch | `sshd` | `pacman` |
-| openSUSE | `sshd` | `zypper` |
-
-The firewall uses nftables, which is present across all of them.
+Remote execution is agentless (russh); host keys are verified against
+known_hosts (trust-on-first-use by default). `inventory.toml` defines servers by
+name and tag.
 
 ## Architecture
 
@@ -199,38 +164,24 @@ Cargo workspace:
 
 ```
 crates/
-  vpsguard-core/      Module trait, Context, Status/Change/Report, Platform, recipes
-  vpsguard-modules/   ssh, firewall, users, updates, fail2ban, docker
-  vpsguard-cli/       clap-based CLI (the vpsguard binary)
-  vpsguard-tui/       ratatui front-end (planned)
-  vpsguard-agent/     remote execution over SSH via russh (planned)
+  vpsguard-core/      Module trait, Context, recipes, Platform, FileSystem
+  vpsguard-modules/   the 13 modules
+  vpsguard-cli/       the vpsguard binary (clap)
+  vpsguard-tui/       ratatui dashboard
+  vpsguard-agent/     remote execution over SSH (russh)
+  vpsguard-state/     SQLite history
 ```
 
-Every module implements one trait:
-
-```rust
-#[async_trait]
-pub trait Module: Send + Sync {
-    fn name(&self) -> &str;
-    fn summary(&self) -> &str;
-    fn category(&self) -> Category;
-    async fn check(&self, ctx: &Context) -> Result<Status>;
-    async fn plan(&self, ctx: &Context) -> Result<Vec<Change>>;
-    async fn apply(&self, ctx: &Context, dry_run: bool) -> Result<Report>;
-    async fn rollback(&self, ctx: &Context) -> Result<()>;
-}
-```
-
-The `Context` injects the filesystem root and a command runner, so modules are
-unit-tested against a tempdir with a mock runner; no root or real services
-needed.
+Every module implements one trait (`check`/`plan`/`apply`/`rollback`/
+`uninstall`). The `Context` injects the filesystem and command runner, so the
+same modules run locally and remotely and are unit-tested against a tempdir with
+a mock runner.
 
 ## Roadmap
 
-- Remote agentless execution (`--target`, `--group`) over russh
-- Interactive TUI (dashboard, security score, plan diff)
-- More provisioning: k3s, TLS/ACME, Tailscale
-- Local state history (SQLite) and timed auto-rollback for SSH/firewall
+- Native (non-Docker) runtimes per framework
+- Server-side lockout guard for remote apply
+- Homebrew, winget, npm, and PyPI packages
 - Compliance reports (CIS, ANSSI)
 
 ## Development
