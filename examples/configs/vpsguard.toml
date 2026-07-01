@@ -61,13 +61,16 @@ databases = ["myapp"]
 enabled = false
 
 # Opt-in app deploy (disabled by default).
+# Setting domain auto-creates a Caddy site (HTTPS) proxying to the app;
+# setting database auto-enables the matching module (postgres/redis).
 [app]
 enabled = false
-framework = "django"   # django | laravel | node | fastapi | rails | generic | static
+framework = "django"   # django|laravel|node|fastapi|rails|php|wordpress|generic|static
 runtime = "docker"     # docker | native
 # repo = "https://github.com/me/myapp.git"
 # dir = "/srv/app"
 # domain = "example.com"
+# port = 8000          # app listen port for the reverse proxy (default per framework)
 database = "postgres"  # none | postgres | mysql | redis
 
 # Opt-in monitoring agent (disabled by default).
