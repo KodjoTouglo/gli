@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{bail, eyre, Context as _, Result};
 use vpsguard_agent::{default_known_hosts, Auth, ConnectOpts, HostKeyPolicy};
-use vpsguard_core::{Config, Context, Inventory, ModuleCatalog, State};
+use vpsguard_core::{Config, Context, Inventory, ModuleCatalog, Server, State};
 use vpsguard_state::{History, DEFAULT_PATH};
 
 mod lockout;
@@ -213,6 +213,14 @@ enum Command {
         #[arg(long)]
         purge: bool,
     },
+    /// List inventory servers, optionally probing SSH connectivity.
+    Servers {
+        /// Only servers whose name or tag matches this selector.
+        group: Option<String>,
+        /// Probe SSH connectivity to each server.
+        #[arg(long)]
+        check: bool,
+    },
     /// Launch the interactive dashboard.
     Tui,
     /// List the builtin recipes.
@@ -262,6 +270,7 @@ async fn main() -> Result<()> {
         Command::Uninstall { module, yes, purge } => {
             cmd_uninstall(&cli, module.as_deref(), *yes, *purge).await
         }
+        Command::Servers { group, check } => cmd_servers(&cli, group.as_deref(), *check).await,
         Command::Tui => {
             let config = load_config(&cli.config)?;
             vpsguard_tui::run(config).await.map_err(|e| eyre!("{e}"))
@@ -590,6 +599,50 @@ async fn cmd_uninstall(cli: &Cli, only: Option<&str>, yes: bool, purge: bool) ->
         if vpsguard_modules::catalog().get(name).is_none() {
             bail!("unknown module `{name}`");
         }
+    }
+    Ok(())
+}
+
+async fn cmd_servers(cli: &Cli, group: Option<&str>, check: bool) -> Result<()> {
+    let raw = std::fs::read_to_string(&cli.inventory)
+        .with_context(|| format!("reading inventory {}", cli.inventory.display()))?;
+    let inv = Inventory::from_toml(&raw)?;
+
+    let rows: Vec<(String, &Server)> = match group {
+        Some(g) => inv
+            .select(g)
+            .into_iter()
+            .map(|(n, s)| (n.to_string(), s))
+            .collect(),
+        None => inv.servers.iter().map(|(n, s)| (n.clone(), s)).collect(),
+    };
+    if rows.is_empty() {
+        println!("no servers in inventory.");
+        return Ok(());
+    }
+
+    let opts = if check {
+        Some(connect_opts(cli)?)
+    } else {
+        None
+    };
+    for (name, s) in rows {
+        let addr = format!("{}@{}:{}", s.user, s.host, s.port);
+        let tags = if s.tags.is_empty() {
+            String::new()
+        } else {
+            format!("[{}]", s.tags.join(","))
+        };
+        let status = match &opts {
+            Some(opts) => {
+                match vpsguard_agent::SshConn::connect(&s.host, s.port, &s.user, opts).await {
+                    Ok(_) => "  reachable".to_string(),
+                    Err(e) => format!("  unreachable: {e}"),
+                }
+            }
+            None => String::new(),
+        };
+        println!("{name:<14} {addr:<28} {tags}{status}");
     }
     Ok(())
 }
