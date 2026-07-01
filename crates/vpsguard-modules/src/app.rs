@@ -1,10 +1,10 @@
-//! Application deploy module: clone a repo and run it.
+//! Application deploy module: clone a repo (or generate a stack) and run it.
 //!
-//! Opt-in, disabled by default. The runtime is chosen in config: `docker` runs
-//! the repo's compose file (framework-agnostic), `native` installs the
-//! framework runtime directly (planned). The framework (Django/Laravel) and
-//! database are recorded for the native path and for future reverse-proxy
-//! wiring. This v1 implements the docker-compose runtime.
+//! Opt-in, disabled by default. The docker runtime runs the repo's compose file
+//! (framework-agnostic). WordPress with no repo generates a self-contained
+//! WordPress + MariaDB compose stack. The native runtime serves a static site
+//! via Caddy; native runtimes for the dynamic frameworks are planned. The
+//! domain and database are wired to Caddy and the db modules in Config::resolve.
 
 use async_trait::async_trait;
 
@@ -25,7 +25,7 @@ impl Module for AppModule {
     }
 
     fn summary(&self) -> &str {
-        "Deploy a Django/Laravel app via docker compose or natively"
+        "Deploy an app (Django, Laravel, Node, WordPress, ...) via compose"
     }
 
     fn category(&self) -> Category {
@@ -33,18 +33,14 @@ impl Module for AppModule {
     }
 
     async fn check(&self, ctx: &Context) -> Result<Status> {
-        let cfg = &ctx.config.app;
-        if !cfg.enabled {
+        if !ctx.config.app.enabled {
             return Ok(Status::not_applicable("app deploy disabled in config"));
-        }
-        if cfg.repo.is_none() {
-            return Ok(Status::not_applicable("no [app].repo configured"));
         }
         Ok(drift_to_status(self_drift(ctx).await))
     }
 
     async fn plan(&self, ctx: &Context) -> Result<Vec<Change>> {
-        if !ctx.config.app.enabled || ctx.config.app.repo.is_none() {
+        if !ctx.config.app.enabled {
             return Ok(Vec::new());
         }
         Ok(self_drift(ctx)
@@ -60,9 +56,6 @@ impl Module for AppModule {
         if !cfg.enabled {
             return Ok(report);
         }
-        let Some(repo) = &cfg.repo else {
-            return Ok(report);
-        };
 
         let drift = self_drift(ctx).await;
         if drift.is_empty() {
@@ -73,7 +66,29 @@ impl Module for AppModule {
             return Ok(report);
         }
 
+        let dir = dir(ctx);
+
+        // WordPress with no repo: generate a WordPress + MariaDB compose stack.
+        if cfg.framework == Framework::Wordpress && cfg.repo.is_none() {
+            ctx.write(format!("{dir}/compose.yaml"), WORDPRESS_COMPOSE)
+                .await?;
+            report
+                .applied
+                .push(Change::command("write WordPress compose stack"));
+            compose_up_cmd(ctx, &dir).await?;
+            report.applied.push(Change::command("docker compose up -d"));
+            return Ok(report);
+        }
+
+        // Native runtime: static sites are served by Caddy, nothing to run.
         if cfg.runtime == AppRuntime::Native {
+            if cfg.framework == Framework::Static {
+                ensure_checkout(ctx, &dir, &mut report).await?;
+                report
+                    .applied
+                    .push(Change::command("static site served by Caddy"));
+                return Ok(report);
+            }
             return Err(Error::Module {
                 module: "app".into(),
                 message: format!(
@@ -83,19 +98,8 @@ impl Module for AppModule {
             });
         }
 
-        let dir = dir(ctx);
-        if !ctx.exists(&dir).await? {
-            ctx.runner()
-                .run_checked("git", &["clone", repo, &dir])
-                .await?;
-            report
-                .applied
-                .push(Change::command(format!("clone {repo} to {dir}")));
-        } else {
-            let _ = ctx.runner().run("git", &["-C", &dir, "pull"]).await;
-            report.applied.push(Change::command(format!("pull {dir}")));
-        }
-
+        // Docker runtime: deploy the repo's compose file.
+        ensure_checkout(ctx, &dir, &mut report).await?;
         if !has_compose_file(ctx, &dir).await {
             return Err(Error::Module {
                 module: "app".into(),
@@ -104,13 +108,7 @@ impl Module for AppModule {
                 ),
             });
         }
-
-        ctx.runner()
-            .run_checked(
-                "docker",
-                &["compose", "--project-directory", &dir, "up", "-d"],
-            )
-            .await?;
+        compose_up_cmd(ctx, &dir).await?;
         report.applied.push(Change::command("docker compose up -d"));
         Ok(report)
     }
@@ -149,25 +147,95 @@ impl Module for AppModule {
 }
 
 async fn self_drift(ctx: &Context) -> Vec<String> {
-    let cfg = &ctx.config.app;
-    if cfg.runtime == AppRuntime::Native {
-        return vec![format!(
-            "deploy {} app (native runtime not yet implemented)",
-            framework_name(cfg.framework)
-        )];
+    if running(ctx).await {
+        Vec::new()
+    } else {
+        vec![format!(
+            "deploy {} app",
+            framework_name(ctx.config.app.framework)
+        )]
     }
-    let mut drift = Vec::new();
-    let dir = dir(ctx);
-    if !ctx.exists(&dir).await.unwrap_or(false) {
-        if let Some(repo) = &cfg.repo {
-            drift.push(format!("clone {repo}"));
-        }
-    }
-    if !compose_up(ctx, &dir).await {
-        drift.push("docker compose up".into());
-    }
-    drift
 }
+
+/// Whether the app is already up. Static native sites are "up" once checked out;
+/// everything else is up when its compose project has running containers.
+async fn running(ctx: &Context) -> bool {
+    let cfg = &ctx.config.app;
+    let dir = dir(ctx);
+    if cfg.runtime == AppRuntime::Native && cfg.framework == Framework::Static {
+        ctx.exists(&dir).await.unwrap_or(false)
+    } else {
+        compose_up(ctx, &dir).await
+    }
+}
+
+/// Clone the repo (or pull if present); require the dir when there is no repo.
+async fn ensure_checkout(ctx: &Context, dir: &str, report: &mut Report) -> Result<()> {
+    match &ctx.config.app.repo {
+        Some(repo) if !ctx.exists(dir).await? => {
+            ctx.runner()
+                .run_checked("git", &["clone", repo, dir])
+                .await?;
+            report
+                .applied
+                .push(Change::command(format!("clone {repo} to {dir}")));
+        }
+        Some(_) => {
+            let _ = ctx.runner().run("git", &["-C", dir, "pull"]).await;
+            report.applied.push(Change::command(format!("pull {dir}")));
+        }
+        None if !ctx.exists(dir).await? => {
+            return Err(Error::Module {
+                module: "app".into(),
+                message: format!("no app.repo set and {dir} does not exist"),
+            });
+        }
+        None => {}
+    }
+    Ok(())
+}
+
+async fn compose_up_cmd(ctx: &Context, dir: &str) -> Result<()> {
+    ctx.runner()
+        .run_checked(
+            "docker",
+            &["compose", "--project-directory", dir, "up", "-d"],
+        )
+        .await
+        .map(|_| ())
+}
+
+/// A self-contained WordPress + MariaDB compose stack, published on port 8080
+/// to match the default reverse-proxy wiring. Change the passwords before use.
+const WORDPRESS_COMPOSE: &str = r#"services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+      MARIADB_ROOT_PASSWORD: wordpress
+    volumes:
+      - db:/var/lib/mysql
+  wordpress:
+    image: wordpress:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp:/var/www/html
+volumes:
+  db:
+  wp:
+"#;
 
 // ---------------------------------------------------------------------------
 // Pure logic
