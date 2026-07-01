@@ -10,3 +10,8 @@ description = "Interactive ratatui front-end for vpsguard."
 
 [dependencies]
 vpsguard-core.workspace = true
+vpsguard-modules.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+futures.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }

@@ -16,6 +16,7 @@ path = "src/main.rs"
 vpsguard-core.workspace = true
 vpsguard-modules.workspace = true
 vpsguard-state.workspace = true
+vpsguard-tui.workspace = true
 vpsguard-agent.workspace = true
 tokio = { workspace = true, features = [
     "rt-multi-thread",
