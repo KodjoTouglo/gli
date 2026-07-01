@@ -14,7 +14,25 @@ mod render;
 const STARTER_CONFIG: &str = include_str!("../../../examples/configs/vpsguard.toml");
 
 #[derive(Parser)]
-#[command(name = "vpsguard", version, about = "Configure and harden a Linux VPS")]
+#[command(
+    name = "vpsguard",
+    version,
+    about = "Configure and harden a Linux VPS from one declarative config",
+    long_about = "vpsguard configures and secures a Linux VPS from a declarative \
+vpsguard.toml. Every change is idempotent, previewed before it runs, and \
+reversible. It runs on the local host or over SSH against one server \
+(--target) or a tagged group from an inventory (--group).",
+    after_help = "EXAMPLES:\n  \
+vpsguard init                        write a starter vpsguard.toml\n  \
+vpsguard plan                        preview the changes (read-only)\n  \
+sudo vpsguard apply                  apply, with confirmation\n  \
+sudo vpsguard apply --dry-run        apply preview, no changes\n  \
+vpsguard audit                       per-module compliance and score\n  \
+vpsguard uninstall docker --purge    remove docker and its data\n  \
+vpsguard tui                         open the interactive dashboard\n  \
+vpsguard plan --target root@host     run read-only against a remote host\n\n\
+Set the SSH password for remote runs with --ask-pass or $VPSGUARD_SSH_PASSWORD."
+)]
 struct Cli {
     /// Path to the configuration file.
     #[arg(short, long, default_value = "vpsguard.toml", global = true)]
