@@ -72,7 +72,7 @@ gli tui             # or drive it all from the dashboard
 
 Global flags select the target: `--target user@host[:port]`, `--group <tag>`
 with `--inventory`, plus SSH auth (`--identity`, `--ask-pass`,
-`$VPSGUARD_SSH_PASSWORD`) and host-key policy (`--strict-host-key`,
+`$GLI_SSH_PASSWORD`) and host-key policy (`--strict-host-key`,
 `--insecure-host-key`, `--known-hosts`).
 
 ## Modules

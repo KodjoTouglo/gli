@@ -3,7 +3,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/gli/develop/install.sh | sh
 #
-# Override version with VPSGUARD_VERSION, install dir with VPSGUARD_BIN_DIR.
+# Override version with GLI_VERSION, install dir with GLI_BIN_DIR.
 set -eu
 
 REPO="KodjoTouglo/gli"
@@ -32,9 +32,11 @@ case "$os" in
     ;;
 esac
 
-tag="${VPSGUARD_VERSION:-}"
+# Newest published release, including pre-releases (the /latest endpoint skips
+# pre-releases, so read the releases list and take the first tag).
+tag="${GLI_VERSION:-}"
 if [ -z "$tag" ]; then
-  tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+  tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=1" \
     | grep '"tag_name":' | head -1 | cut -d'"' -f4)
 fi
 [ -n "$tag" ] || { echo "could not resolve the latest version" >&2; exit 1; }
@@ -49,7 +51,7 @@ echo "Downloading $asset ..."
 curl -fsSL "$url" -o "$tmp/$asset"
 tar -xzf "$tmp/$asset" -C "$tmp"
 
-dir="${VPSGUARD_BIN_DIR:-/usr/local/bin}"
+dir="${GLI_BIN_DIR:-/usr/local/bin}"
 [ -w "$dir" ] 2>/dev/null || dir="$HOME/.local/bin"
 mkdir -p "$dir"
 cp "$tmp/$BIN" "$dir/$BIN"

@@ -31,7 +31,7 @@ gli audit                       per-module compliance and score\n  \
 gli uninstall docker --purge    remove docker and its data\n  \
 gli tui                         open the interactive dashboard\n  \
 gli plan --target root@host     run read-only against a remote host\n\n\
-Set the SSH password for remote runs with --ask-pass or $VPSGUARD_SSH_PASSWORD."
+Set the SSH password for remote runs with --ask-pass or $GLI_SSH_PASSWORD."
 )]
 struct Cli {
     /// Path to the configuration file.
@@ -50,7 +50,7 @@ struct Cli {
     #[arg(long, global = true, default_value = "inventory.toml")]
     inventory: PathBuf,
 
-    /// Prompt for the SSH password (otherwise read $VPSGUARD_SSH_PASSWORD).
+    /// Prompt for the SSH password (otherwise read $GLI_SSH_PASSWORD).
     #[arg(long, global = true)]
     ask_pass: bool,
 
@@ -147,7 +147,7 @@ fn connect_opts(cli: &Cli) -> Result<ConnectOpts> {
                 .without_confirmation()
                 .prompt()?,
         )
-    } else if let Ok(p) = std::env::var("VPSGUARD_SSH_PASSWORD") {
+    } else if let Ok(p) = std::env::var("GLI_SSH_PASSWORD") {
         Auth::Password(p)
     } else if let Some(key) = default_key() {
         Auth::Key {
@@ -155,7 +155,7 @@ fn connect_opts(cli: &Cli) -> Result<ConnectOpts> {
             passphrase: None,
         }
     } else {
-        bail!("no SSH auth: pass --identity <key>, --ask-pass, set $VPSGUARD_SSH_PASSWORD, or have a default key");
+        bail!("no SSH auth: pass --identity <key>, --ask-pass, set $GLI_SSH_PASSWORD, or have a default key");
     };
 
     let host_key = if cli.insecure_host_key {
