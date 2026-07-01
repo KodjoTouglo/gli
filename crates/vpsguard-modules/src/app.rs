@@ -185,6 +185,11 @@ fn framework_name(f: Framework) -> &'static str {
     match f {
         Framework::Django => "Django",
         Framework::Laravel => "Laravel",
+        Framework::Node => "Node/Next.js",
+        Framework::Fastapi => "FastAPI",
+        Framework::Rails => "Rails",
+        Framework::Generic => "Generic",
+        Framework::Static => "Static",
     }
 }
 
@@ -258,5 +263,8 @@ mod tests {
     fn framework_names() {
         assert_eq!(framework_name(Framework::Django), "Django");
         assert_eq!(framework_name(Framework::Laravel), "Laravel");
+        assert_eq!(framework_name(Framework::Node), "Node/Next.js");
+        assert_eq!(framework_name(Framework::Fastapi), "FastAPI");
+        assert_eq!(framework_name(Framework::Rails), "Rails");
     }
 }

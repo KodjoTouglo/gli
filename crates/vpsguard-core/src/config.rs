@@ -104,13 +104,24 @@ pub struct RedisConfig {
     pub enabled: bool,
 }
 
-/// Web framework an app uses.
+/// Web framework an app uses. Docker runtime is framework-agnostic; the
+/// framework guides the native runtime and auto-wiring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Framework {
     #[default]
     Django,
     Laravel,
+    /// Node.js apps (Express, Next.js, Nest).
+    Node,
+    /// FastAPI (Python).
+    Fastapi,
+    /// Ruby on Rails.
+    Rails,
+    /// Any app with its own compose file, no framework specifics.
+    Generic,
+    /// Static site served by Caddy (no application runtime).
+    Static,
 }
 
 /// How the app is run.
