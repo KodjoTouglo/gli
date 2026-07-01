@@ -1,9 +1,9 @@
-# vpsguard
+# gli
 
 Configure, secure, and provision a Linux VPS from one declarative file.
 
-vpsguard is a single static Rust binary that hardens and sets up a server from a
-declarative `vpsguard.toml`. Every change is idempotent, previewed before it
+gli is a single static Rust binary that hardens and sets up a server from a
+declarative `gli.toml`. Every change is idempotent, previewed before it
 runs, and reversible. It fills the gap left by fragile bash scripts (no safety,
 no idempotence), Ansible (too heavy for one box), and PaaS tools like Coolify
 (deploy apps but don't secure the OS).
@@ -16,7 +16,7 @@ Debian/Ubuntu, Fedora, Rocky/RHEL, Arch, and openSUSE.
 When you rent a new VPS there is a pile of setup before it is safe or useful:
 lock down SSH, put up a firewall, create a deploy user, enable automatic
 updates, add fail2ban, install Docker, deploy an app with HTTPS, add monitoring.
-vpsguard does all of it from one config file, safely and repeatably.
+gli does all of it from one config file, safely and repeatably.
 
 ## Principles
 
@@ -40,26 +40,26 @@ Windows: download the `.zip` from the [Releases](https://github.com/KodjoTouglo/
 With Cargo, or from source (Rust 1.85+):
 
 ```sh
-cargo install --git https://github.com/KodjoTouglo/hardn vpsguard-cli
+cargo install --git https://github.com/KodjoTouglo/hardn gli-cli
 # or
 git clone https://github.com/KodjoTouglo/hardn.git && cd hardn
-cargo build --release --bin vpsguard
+cargo build --release --bin gli
 ```
 
 ## Quickstart
 
 ```sh
-vpsguard init            # write a starter vpsguard.toml
-vpsguard plan            # preview the changes (read-only)
-sudo vpsguard apply      # apply, with confirmation
-vpsguard tui             # or drive it all from the dashboard
+gli init            # write a starter gli.toml
+gli plan            # preview the changes (read-only)
+sudo gli apply      # apply, with confirmation
+gli tui             # or drive it all from the dashboard
 ```
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `init` | Write a starter `vpsguard.toml` (`--force` to overwrite) |
+| `init` | Write a starter `gli.toml` (`--force` to overwrite) |
 | `plan` | Show the changes `apply` would make (read-only) |
 | `apply` | Converge the system (`--dry-run`, `--yes`, `--no-guard`) |
 | `audit` | Per-module compliance and a score (`--json` for machine output) |
@@ -97,7 +97,7 @@ Security modules form an always-on baseline; provisioning modules are opt-in.
 
 ## Configuration
 
-`vpsguard.toml` (excerpt; see [examples/configs/vpsguard.toml](examples/configs/vpsguard.toml)):
+`gli.toml` (excerpt; see [examples/configs/gli.toml](examples/configs/gli.toml)):
 
 ```toml
 profile = "balanced"   # homelab | balanced | strict | paranoid
@@ -142,16 +142,16 @@ recipe = "wordpress"
 domain = "blog.example.com"
 ```
 
-`vpsguard apply` then stands up a full WordPress + MariaDB stack behind
+`gli apply` then stands up a full WordPress + MariaDB stack behind
 automatic HTTPS. Builtin: `baseline`, `web-server`, `docker-host`, `wordpress`
-(`vpsguard recipes`).
+(`gli recipes`).
 
 ## Remote and fleets
 
 ```sh
-vpsguard plan --target root@203.0.113.10           # one host, read-only
-vpsguard audit --group prod --json | jq            # a tagged fleet, as JSON
-vpsguard servers --check                           # inventory + connectivity
+gli plan --target root@203.0.113.10           # one host, read-only
+gli audit --group prod --json | jq            # a tagged fleet, as JSON
+gli servers --check                           # inventory + connectivity
 ```
 
 Remote execution is agentless (russh); host keys are verified against
@@ -164,12 +164,12 @@ Cargo workspace:
 
 ```
 crates/
-  vpsguard-core/      Module trait, Context, recipes, Platform, FileSystem
-  vpsguard-modules/   the 13 modules
-  vpsguard-cli/       the vpsguard binary (clap)
-  vpsguard-tui/       ratatui dashboard
-  vpsguard-agent/     remote execution over SSH (russh)
-  vpsguard-state/     SQLite history
+  gli-core/      Module trait, Context, recipes, Platform, FileSystem
+  gli-modules/   the 13 modules
+  gli-cli/       the gli binary (clap)
+  gli-tui/       ratatui dashboard
+  gli-agent/     remote execution over SSH (russh)
+  gli-state/     SQLite history
 ```
 
 Every module implements one trait (`check`/`plan`/`apply`/`rollback`/

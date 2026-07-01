@@ -897,6 +897,82 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
 
 [[package]]
+name = "gli-agent"
+version = "0.1.0-rc.1"
+dependencies = [
+ "async-trait",
+ "base64",
+ "gli-core",
+ "russh",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "gli-cli"
+version = "0.1.0-rc.1"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "futures",
+ "gli-agent",
+ "gli-core",
+ "gli-modules",
+ "gli-state",
+ "gli-tui",
+ "inquire",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "gli-core"
+version = "0.1.0-rc.1"
+dependencies = [
+ "async-trait",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
+name = "gli-modules"
+version = "0.1.0-rc.1"
+dependencies = [
+ "async-trait",
+ "gli-core",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "gli-state"
+version = "0.1.0-rc.1"
+dependencies = [
+ "rusqlite",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "gli-tui"
+version = "0.1.0-rc.1"
+dependencies = [
+ "crossterm 0.28.1",
+ "futures",
+ "gli-core",
+ "gli-modules",
+ "ratatui",
+ "tokio",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2416,82 +2492,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vpsguard-agent"
-version = "0.1.0-rc.1"
-dependencies = [
- "async-trait",
- "base64",
- "russh",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "vpsguard-core",
-]
-
-[[package]]
-name = "vpsguard-cli"
-version = "0.1.0-rc.1"
-dependencies = [
- "clap",
- "color-eyre",
- "futures",
- "inquire",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "vpsguard-agent",
- "vpsguard-core",
- "vpsguard-modules",
- "vpsguard-state",
- "vpsguard-tui",
-]
-
-[[package]]
-name = "vpsguard-core"
-version = "0.1.0-rc.1"
-dependencies = [
- "async-trait",
- "serde",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "toml",
- "tracing",
-]
-
-[[package]]
-name = "vpsguard-modules"
-version = "0.1.0-rc.1"
-dependencies = [
- "async-trait",
- "tempfile",
- "tokio",
- "tracing",
- "vpsguard-core",
-]
-
-[[package]]
-name = "vpsguard-state"
-version = "0.1.0-rc.1"
-dependencies = [
- "rusqlite",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "vpsguard-tui"
-version = "0.1.0-rc.1"
-dependencies = [
- "crossterm 0.28.1",
- "futures",
- "ratatui",
- "tokio",
- "vpsguard-core",
- "vpsguard-modules",
-]
 
 [[package]]
 name = "wasi"

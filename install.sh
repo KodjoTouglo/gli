@@ -1,5 +1,5 @@
 #!/bin/sh
-# vpsguard installer: downloads the right prebuilt binary from GitHub Releases.
+# gli installer: downloads the right prebuilt binary from GitHub Releases.
 #
 #   curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/hardn/develop/install.sh | sh
 #
@@ -7,7 +7,7 @@
 set -eu
 
 REPO="KodjoTouglo/hardn"
-BIN="vpsguard"
+BIN="gli"
 
 os=$(uname -s)
 arch=$(uname -m)
@@ -58,5 +58,5 @@ chmod 0755 "$dir/$BIN"
 echo "Installed $BIN $tag to $dir/$BIN"
 case ":$PATH:" in
   *":$dir:"*) ;;
-  *) echo "Add $dir to your PATH to run vpsguard." ;;
+  *) echo "Add $dir to your PATH to run gli." ;;
 esac

@@ -1,0 +1,79 @@
+# gli example configuration.
+# profile: homelab | balanced | strict | paranoid
+profile = "balanced"
+
+[system]
+# hostname = "my-vps"
+# timezone = "Europe/Paris"
+# swap_mb = 2048
+
+[ssh]
+port = 2222
+permit_root_login = false
+password_auth = false
+modern_ciphers = true
+
+[firewall]
+enabled = true
+backend = "nftables"
+default = "deny"
+allow = ["80/tcp", "443/tcp"]
+
+[users.deploy]
+sudo = true
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAExampleKeyReplaceMe deploy@gli"]
+
+[updates]
+enabled = true
+auto_reboot = "02:00"
+
+[fail2ban]
+enabled = true
+jails = ["sshd"]
+bantime = "10m"
+maxretry = 5
+
+# Opt-in Docker runtime (disabled by default).
+[docker]
+enabled = false
+users = ["deploy"]
+
+# Opt-in Caddy reverse proxy with automatic HTTPS (disabled by default).
+[caddy]
+enabled = false
+
+[[caddy.sites]]
+domain = "example.com"
+reverse_proxy = "localhost:8080"
+
+# Opt-in Tailscale (disabled by default).
+[tailscale]
+enabled = false
+# auth_key = "tskey-..."
+ssh = false
+
+# Opt-in databases (disabled by default).
+[postgres]
+enabled = false
+databases = ["myapp"]
+
+[redis]
+enabled = false
+
+# Opt-in app deploy (disabled by default).
+# Setting domain auto-creates a Caddy site (HTTPS) proxying to the app;
+# setting database auto-enables the matching module (postgres/redis).
+[app]
+enabled = false
+framework = "django"   # django|laravel|node|fastapi|rails|php|wordpress|generic|static
+runtime = "docker"     # docker | native
+# repo = "https://github.com/me/myapp.git"
+# dir = "/srv/app"
+# domain = "example.com"
+# port = 8000          # app listen port for the reverse proxy (default per framework)
+database = "postgres"  # none | postgres | mysql | redis
+
+# Opt-in monitoring agent (disabled by default).
+[monitoring]
+enabled = false
+backend = "netdata"   # netdata | node_exporter

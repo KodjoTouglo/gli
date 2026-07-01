@@ -12,11 +12,11 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 # Internal crates
-vpsguard-core = { path = "crates/vpsguard-core" }
-vpsguard-modules = { path = "crates/vpsguard-modules" }
-vpsguard-state = { path = "crates/vpsguard-state" }
-vpsguard-tui = { path = "crates/vpsguard-tui" }
-vpsguard-agent = { path = "crates/vpsguard-agent" }
+gli-core = { path = "crates/gli-core" }
+gli-modules = { path = "crates/gli-modules" }
+gli-state = { path = "crates/gli-state" }
+gli-tui = { path = "crates/gli-tui" }
+gli-agent = { path = "crates/gli-agent" }
 
 # Async
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "time"] }

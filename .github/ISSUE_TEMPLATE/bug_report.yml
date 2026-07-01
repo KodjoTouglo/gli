@@ -13,15 +13,15 @@ body:
     id: repro
     attributes:
       label: Steps to reproduce
-      description: The command you ran and the relevant part of your vpsguard.toml.
+      description: The command you ran and the relevant part of your gli.toml.
       render: shell
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: vpsguard version
-      description: Output of `vpsguard --version`.
+      label: gli version
+      description: Output of `gli --version`.
     validations:
       required: true
   - type: input
