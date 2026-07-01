@@ -195,6 +195,8 @@ enum Command {
         #[arg(long)]
         purge: bool,
     },
+    /// Launch the interactive dashboard.
+    Tui,
     /// List the builtin recipes.
     Recipes,
     /// Show recent apply/rollback events.
@@ -241,6 +243,10 @@ async fn main() -> Result<()> {
         Command::Rollback { module } => cmd_rollback(&cli.config, module.as_deref()).await,
         Command::Uninstall { module, yes, purge } => {
             cmd_uninstall(&cli, module.as_deref(), *yes, *purge).await
+        }
+        Command::Tui => {
+            let config = load_config(&cli.config)?;
+            vpsguard_tui::run(config).await.map_err(|e| eyre!("{e}"))
         }
         Command::Recipes => {
             cmd_recipes();
