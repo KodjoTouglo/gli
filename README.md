@@ -32,17 +32,17 @@ gli does all of it from one config file, safely and repeatably.
 Prebuilt binary (Linux x86_64/arm64, macOS Intel/Apple Silicon):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/hardn/develop/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/gli/main/install.sh | sh
 ```
 
-Windows: download the `.zip` from the [Releases](https://github.com/KodjoTouglo/hardn/releases) page.
+Windows: download the `.zip` from the [Releases](https://github.com/KodjoTouglo/gli/releases) page.
 
 With Cargo, or from source (Rust 1.85+):
 
 ```sh
-cargo install --git https://github.com/KodjoTouglo/hardn gli-cli
+cargo install --git https://github.com/KodjoTouglo/gli gli-cli
 # or
-git clone https://github.com/KodjoTouglo/hardn.git && cd hardn
+git clone https://github.com/KodjoTouglo/gli.git && cd gli
 cargo build --release --bin gli
 ```
 

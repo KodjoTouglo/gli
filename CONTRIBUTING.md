@@ -5,8 +5,8 @@ Thanks for helping. This guide keeps changes consistent and safe.
 ## Getting started
 
 ```sh
-git clone https://github.com/KodjoTouglo/hardn.git
-cd hardn
+git clone https://github.com/KodjoTouglo/gli.git
+cd gli
 cargo build --workspace
 cargo test --workspace
 ```
