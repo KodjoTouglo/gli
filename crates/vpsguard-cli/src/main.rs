@@ -196,7 +196,11 @@ enum Command {
         no_guard: bool,
     },
     /// Report compliance of each module.
-    Audit,
+    Audit {
+        /// Emit machine-readable JSON (per host: modules, states, score).
+        #[arg(long)]
+        json: bool,
+    },
     /// Restore the state captured before the last apply.
     Rollback {
         /// Limit rollback to one module by name.
@@ -265,7 +269,7 @@ async fn main() -> Result<()> {
             yes,
             no_guard,
         } => cmd_apply(&cli, *dry_run, *yes, *no_guard).await,
-        Command::Audit => cmd_audit(&cli).await,
+        Command::Audit { json } => cmd_audit(&cli, *json).await,
         Command::Rollback { module } => cmd_rollback(&cli.config, module.as_deref()).await,
         Command::Uninstall { module, yes, purge } => {
             cmd_uninstall(&cli, module.as_deref(), *yes, *purge).await
@@ -299,14 +303,22 @@ async fn contexts(cli: &Cli) -> Result<Vec<(String, Context)>> {
         return Ok(vec![("local".to_string(), Context::system(config))]);
     }
     let opts = connect_opts(cli)?;
-    let mut out = Vec::new();
-    for r in remotes {
-        let ctx = vpsguard_agent::remote_context(config.clone(), &r.host, r.port, &r.user, &opts)
-            .await
-            .map_err(|e| eyre!("{e}"))?;
-        out.push((format!("{}@{}:{}", r.user, r.host, r.port), ctx));
-    }
-    Ok(out)
+    // Connect to every host concurrently; the SSH handshake dominates.
+    let connects = remotes.into_iter().map(|r| {
+        let config = config.clone();
+        let opts = &opts;
+        async move {
+            let label = format!("{}@{}:{}", r.user, r.host, r.port);
+            vpsguard_agent::remote_context(config, &r.host, r.port, &r.user, opts)
+                .await
+                .map(|ctx| (label.clone(), ctx))
+                .map_err(|e| eyre!("{label}: {e}"))
+        }
+    });
+    futures::future::join_all(connects)
+        .await
+        .into_iter()
+        .collect()
 }
 
 /// Open the history store, best-effort: a warning instead of failing the run.
@@ -373,23 +385,6 @@ async fn run_plan(ctx: &Context, catalog: &ModuleCatalog) -> Result<()> {
         render::module_plan(module, &status, &changes);
     }
     render::summary(total);
-    Ok(())
-}
-
-async fn run_audit(ctx: &Context, catalog: &ModuleCatalog) -> Result<()> {
-    let mut compliant = 0;
-    let mut applicable = 0;
-    for module in catalog.iter() {
-        let status = module.check(ctx).await?;
-        if status.state != State::NotApplicable {
-            applicable += 1;
-        }
-        if status.is_compliant() {
-            compliant += 1;
-        }
-        render::audit_line(module, &status);
-    }
-    render::score(compliant, applicable);
     Ok(())
 }
 
@@ -499,19 +494,64 @@ async fn cmd_apply(cli: &Cli, dry_run: bool, yes: bool, no_guard: bool) -> Resul
     Ok(())
 }
 
-async fn cmd_audit(cli: &Cli) -> Result<()> {
+async fn cmd_audit(cli: &Cli, json: bool) -> Result<()> {
     let catalog = vpsguard_modules::catalog();
     let remote = cli.target.is_some() || cli.group.is_some();
+    let mut report = Vec::new();
+
     for (label, ctx) in contexts(cli).await? {
-        if remote {
+        if !json && remote {
             println!("=== {label} ===");
         }
-        run_audit(&ctx, &catalog).await?;
-        if remote {
-            println!();
+        let mut compliant = 0;
+        let mut applicable = 0;
+        let mut modules = Vec::new();
+        for module in catalog.iter() {
+            let status = module.check(&ctx).await?;
+            if status.state != State::NotApplicable {
+                applicable += 1;
+            }
+            if status.is_compliant() {
+                compliant += 1;
+            }
+            if json {
+                modules.push(serde_json::json!({
+                    "name": module.name(),
+                    "category": format!("{:?}", module.category()),
+                    "state": state_str(status.state),
+                    "detail": status.detail,
+                }));
+            } else {
+                render::audit_line(module, &status);
+            }
+        }
+        if json {
+            report.push(serde_json::json!({
+                "host": label,
+                "score": { "compliant": compliant, "applicable": applicable },
+                "modules": modules,
+            }));
+        } else {
+            render::score(compliant, applicable);
+            if remote {
+                println!();
+            }
         }
     }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    }
     Ok(())
+}
+
+fn state_str(state: State) -> &'static str {
+    match state {
+        State::Compliant => "compliant",
+        State::Drift => "drift",
+        State::Error => "error",
+        State::NotApplicable => "not_applicable",
+    }
 }
 
 async fn cmd_rollback(config_path: &PathBuf, only: Option<&str>) -> Result<()> {
