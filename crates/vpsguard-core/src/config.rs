@@ -38,6 +38,28 @@ pub struct Config {
     pub postgres: PostgresConfig,
     pub redis: RedisConfig,
     pub app: AppConfig,
+    pub monitoring: MonitoringConfig,
+}
+
+/// Monitoring settings (`[monitoring]`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct MonitoringConfig {
+    /// Install a monitoring agent.
+    pub enabled: bool,
+    /// Which agent to install.
+    pub backend: MonitoringBackend,
+}
+
+/// Monitoring agent backend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MonitoringBackend {
+    /// All-in-one agent with a built-in web dashboard.
+    #[default]
+    Netdata,
+    /// Prometheus node_exporter, for scraping by a central Prometheus.
+    NodeExporter,
 }
 
 /// Base system settings (`[system]`): hostname, timezone, swap.
