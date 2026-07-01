@@ -98,6 +98,31 @@ impl Module for UpdatesModule {
         }
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("updates", false);
+        match ctx.platform().family {
+            DistroFamily::Debian => {
+                let _ = ctx.remove(APT_PERIODIC).await;
+                let _ = ctx.remove(APT_REBOOT).await;
+                if purge {
+                    crate::common::remove_pkg(ctx, "unattended-upgrades", true).await;
+                }
+            }
+            DistroFamily::Rhel => {
+                let _ = ctx.remove(DNF_CONF).await;
+                crate::common::disable_service(ctx, DNF_TIMER).await;
+                if purge {
+                    crate::common::remove_pkg(ctx, "dnf-automatic", true).await;
+                }
+            }
+            _ => {}
+        }
+        report
+            .applied
+            .push(Change::command("disable automatic updates"));
+        Ok(report)
+    }
 }
 
 // ---------------------------------------------------------------------------

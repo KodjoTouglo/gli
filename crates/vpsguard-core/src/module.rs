@@ -54,4 +54,13 @@ pub trait Module: Send + Sync {
 
     /// Restore the state captured before the last `apply`.
     async fn rollback(&self, ctx: &Context) -> Result<()>;
+
+    /// Remove what this module installed: stop and disable services, remove
+    /// packages, delete managed files. `purge` also deletes data (databases,
+    /// swap files, checkouts); without it, data is preserved. Best-effort:
+    /// individual steps that fail should not abort the whole teardown. The
+    /// default removes nothing (hardening-only modules override where useful).
+    async fn uninstall(&self, _ctx: &Context, _purge: bool) -> Result<Report> {
+        Ok(Report::new(self.name(), false))
+    }
 }

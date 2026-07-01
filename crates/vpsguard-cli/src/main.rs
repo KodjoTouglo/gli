@@ -184,6 +184,17 @@ enum Command {
         /// Limit rollback to one module by name.
         module: Option<String>,
     },
+    /// Remove installed modules: stop services, remove packages, delete config.
+    Uninstall {
+        /// Limit to one module by name (default: all, provisioning first).
+        module: Option<String>,
+        /// Skip the confirmation prompt.
+        #[arg(long)]
+        yes: bool,
+        /// Also delete data (databases, swap file, app checkout).
+        #[arg(long)]
+        purge: bool,
+    },
     /// List the builtin recipes.
     Recipes,
     /// Show recent apply/rollback events.
@@ -228,6 +239,9 @@ async fn main() -> Result<()> {
         } => cmd_apply(&cli, *dry_run, *yes, *no_guard).await,
         Command::Audit => cmd_audit(&cli).await,
         Command::Rollback { module } => cmd_rollback(&cli.config, module.as_deref()).await,
+        Command::Uninstall { module, yes, purge } => {
+            cmd_uninstall(&cli, module.as_deref(), *yes, *purge).await
+        }
         Command::Recipes => {
             cmd_recipes();
             Ok(())
@@ -495,6 +509,62 @@ async fn cmd_rollback(config_path: &PathBuf, only: Option<&str>) -> Result<()> {
                 record(module.name(), false, &e.to_string());
                 eprintln!("[-] {}: {e}", module.name());
             }
+        }
+    }
+    Ok(())
+}
+
+async fn cmd_uninstall(cli: &Cli, only: Option<&str>, yes: bool, purge: bool) -> Result<()> {
+    let ctxs = contexts(cli).await?;
+    let scope = only.unwrap_or("all modules");
+    let data = if purge { " and DELETE their data" } else { "" };
+    println!("This will uninstall {scope}{data}.");
+    if !yes {
+        let msg = if purge {
+            "Uninstall and purge data? This is destructive"
+        } else {
+            "Uninstall these modules?"
+        };
+        if !inquire::Confirm::new(msg).with_default(false).prompt()? {
+            println!("aborted.");
+            return Ok(());
+        }
+    }
+
+    let history = open_history();
+    let remote = ctxs.len() > 1 || ctxs.first().is_some_and(|(l, _)| l != "local");
+    for (label, ctx) in &ctxs {
+        if remote {
+            println!("\n== {label} ==");
+        }
+        let catalog = vpsguard_modules::catalog();
+        // Uninstall provisioning before the security baseline (reverse of apply).
+        let mut modules: Vec<_> = catalog.iter().collect();
+        modules.reverse();
+        for module in modules {
+            if only.is_some_and(|n| n != module.name()) {
+                continue;
+            }
+            match module.uninstall(ctx, purge).await {
+                Ok(report) => {
+                    render::apply_report(&report);
+                    if let Some(h) = &history {
+                        let _ = h.record("uninstall", module.name(), "removed", true);
+                    }
+                }
+                Err(e) => {
+                    if let Some(h) = &history {
+                        let _ = h.record("uninstall", module.name(), &e.to_string(), false);
+                    }
+                    eprintln!("[x] {}: {e}", module.name());
+                }
+            }
+        }
+    }
+
+    if let Some(name) = only {
+        if vpsguard_modules::catalog().get(name).is_none() {
+            bail!("unknown module `{name}`");
         }
     }
     Ok(())

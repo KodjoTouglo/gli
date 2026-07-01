@@ -107,6 +107,27 @@ impl Module for DockerModule {
         }
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("docker", false);
+        for user in &ctx.config.docker.users {
+            let _ = ctx.runner().run("gpasswd", &["-d", user, "docker"]).await;
+        }
+        crate::common::disable_service(ctx, SERVICE).await;
+        // Debian ships docker.io; other families use docker/docker-ce.
+        let pkg = if ctx.platform().family == DistroFamily::Debian {
+            "docker.io"
+        } else {
+            "docker"
+        };
+        crate::common::remove_pkg(ctx, pkg, purge).await;
+        report.applied.push(Change::command("remove docker"));
+        if purge {
+            let _ = ctx.runner().run("rm", &["-rf", "/var/lib/docker"]).await;
+            report.applied.push(Change::command("purge docker data"));
+        }
+        Ok(report)
+    }
 }
 
 async fn self_drift(ctx: &Context) -> Vec<String> {

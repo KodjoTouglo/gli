@@ -121,6 +121,20 @@ impl Module for FirewallModule {
         let _ = ctx.remove(BACKUP).await;
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, _purge: bool) -> Result<Report> {
+        let mut report = Report::new("firewall", false);
+        // Drop the managed table; leaves the host with no vpsguard firewall.
+        let _ = ctx
+            .runner()
+            .run("nft", &["delete", "table", "inet", TABLE])
+            .await;
+        let _ = ctx.remove(BACKUP).await;
+        report
+            .applied
+            .push(Change::command("delete vpsguard nftables table"));
+        Ok(report)
+    }
 }
 
 // ---------------------------------------------------------------------------
