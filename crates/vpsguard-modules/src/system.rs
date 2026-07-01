@@ -138,6 +138,20 @@ impl Module for SystemModule {
         }
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, _purge: bool) -> Result<Report> {
+        // Hostname and timezone are host settings, not removable; only the
+        // managed swap file is torn down here.
+        let mut report = Report::new("system", false);
+        let _ = ctx.runner().run("swapoff", &[SWAPFILE]).await;
+        if ctx.remove(SWAPFILE).await.is_ok() {
+            if let Some(stripped) = remove_swap_fstab(&ctx.read_or_empty(FSTAB).await?) {
+                let _ = ctx.write(FSTAB, &stripped).await;
+            }
+            report.applied.push(Change::command("remove swap file"));
+        }
+        Ok(report)
+    }
 }
 
 async fn self_drift(ctx: &Context) -> Result<Vec<String>> {

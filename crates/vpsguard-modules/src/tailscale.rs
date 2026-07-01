@@ -81,6 +81,21 @@ impl Module for TailscaleModule {
         let _ = ctx.runner().run("tailscale", &["down"]).await;
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("tailscale", false);
+        let _ = ctx.runner().run("tailscale", &["down"]).await;
+        crate::common::disable_service(ctx, SERVICE).await;
+        crate::common::remove_pkg(ctx, "tailscale", purge).await;
+        report.applied.push(Change::command("remove tailscale"));
+        if purge {
+            let _ = ctx.runner().run("rm", &["-rf", "/var/lib/tailscale"]).await;
+            report
+                .applied
+                .push(Change::command("purge tailscale state"));
+        }
+        Ok(report)
+    }
 }
 
 async fn self_drift(ctx: &Context) -> Vec<String> {

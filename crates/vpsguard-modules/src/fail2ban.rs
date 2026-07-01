@@ -108,6 +108,19 @@ impl Module for Fail2banModule {
             .await;
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("fail2ban", false);
+        crate::common::disable_service(ctx, SERVICE).await;
+        let _ = ctx.remove(JAIL_FILE).await;
+        crate::common::remove_pkg(ctx, "fail2ban", purge).await;
+        report.applied.push(Change::command("remove fail2ban"));
+        if purge {
+            let _ = ctx.runner().run("rm", &["-rf", "/var/lib/fail2ban"]).await;
+            report.applied.push(Change::command("purge fail2ban data"));
+        }
+        Ok(report)
+    }
 }
 
 async fn self_drift(ctx: &Context, pkg: &PackageOps) -> Result<Vec<String>> {

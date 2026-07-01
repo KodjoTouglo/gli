@@ -120,6 +120,20 @@ impl Module for CaddyModule {
         }
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("caddy", false);
+        crate::common::disable_service(ctx, SERVICE).await;
+        let _ = ctx.remove(CADDYFILE).await;
+        crate::common::remove_pkg(ctx, "caddy", purge).await;
+        report.applied.push(Change::command("remove caddy"));
+        if purge {
+            // Certificates and site data.
+            let _ = ctx.runner().run("rm", &["-rf", "/var/lib/caddy"]).await;
+            report.applied.push(Change::command("purge caddy data"));
+        }
+        Ok(report)
+    }
 }
 
 /// Enabled, has sites, and a known install path.

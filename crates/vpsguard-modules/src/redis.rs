@@ -82,6 +82,22 @@ impl Module for RedisModule {
     async fn rollback(&self, _ctx: &Context) -> Result<()> {
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("redis", false);
+        let Some(pkg) = packaging(ctx) else {
+            return Ok(report);
+        };
+        crate::common::disable_service(ctx, pkg.service).await;
+        let name = pkg.install.1.last().copied().unwrap_or("redis");
+        crate::common::remove_pkg(ctx, name, purge).await;
+        report.applied.push(Change::command("remove redis"));
+        if purge {
+            let _ = ctx.runner().run("rm", &["-rf", "/var/lib/redis"]).await;
+            report.applied.push(Change::command("purge redis data"));
+        }
+        Ok(report)
+    }
 }
 
 async fn self_drift(ctx: &Context, pkg: &Packaging) -> Vec<String> {

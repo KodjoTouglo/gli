@@ -143,6 +143,25 @@ impl Module for SshModule {
         let _ = ctx.remove(&backup).await;
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, _purge: bool) -> Result<Report> {
+        // sshd is not a vpsguard-installed package; "uninstall" reverts the
+        // hardening by restoring the pre-apply snapshot, if any.
+        let mut report = Report::new("ssh", false);
+        let backup = with_suffix(Path::new(SSHD_CONFIG), BACKUP_SUFFIX);
+        if let Some(saved) = ctx.read(&backup).await? {
+            ctx.write(SSHD_CONFIG, &saved).await?;
+            let _ = ctx
+                .runner()
+                .run("systemctl", &["restart", ctx.platform().ssh_service()])
+                .await;
+            let _ = ctx.remove(&backup).await;
+            report
+                .applied
+                .push(Change::command("restore original sshd_config"));
+        }
+        Ok(report)
+    }
 }
 
 // ---------------------------------------------------------------------------

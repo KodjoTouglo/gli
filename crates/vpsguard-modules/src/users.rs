@@ -89,6 +89,24 @@ impl Module for UsersModule {
         }
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("users", false);
+        for name in ctx.config.users.keys() {
+            let _ = ctx.remove(sudoers_file(name)).await;
+            report
+                .applied
+                .push(Change::command(format!("revoke sudo from {name}")));
+            if purge {
+                // Delete the account and its home directory.
+                let _ = ctx.runner().run("userdel", &["-r", name]).await;
+                report
+                    .applied
+                    .push(Change::command(format!("delete user {name}")));
+            }
+        }
+        Ok(report)
+    }
 }
 
 async fn apply_user(

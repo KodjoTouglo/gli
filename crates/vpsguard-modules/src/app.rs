@@ -125,6 +125,27 @@ impl Module for AppModule {
         }
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("app", false);
+        let dir = dir(ctx);
+        if ctx.config.app.runtime == AppRuntime::Docker {
+            // -v removes named volumes (data) only when purging.
+            let mut args = vec!["compose", "--project-directory", dir.as_str(), "down"];
+            if purge {
+                args.push("-v");
+            }
+            let _ = ctx.runner().run("docker", &args).await;
+        }
+        report.applied.push(Change::command("stop app"));
+        if purge {
+            let _ = ctx.runner().run("rm", &["-rf", &dir]).await;
+            report
+                .applied
+                .push(Change::command(format!("purge checkout {dir}")));
+        }
+        Ok(report)
+    }
 }
 
 async fn self_drift(ctx: &Context) -> Vec<String> {

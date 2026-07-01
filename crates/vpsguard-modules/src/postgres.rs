@@ -106,6 +106,29 @@ impl Module for PostgresModule {
         // Databases are not dropped on rollback (data preservation).
         Ok(())
     }
+
+    async fn uninstall(&self, ctx: &Context, purge: bool) -> Result<Report> {
+        let mut report = Report::new("postgres", false);
+        crate::common::disable_service(ctx, SERVICE).await;
+        let pkg = if ctx.platform().family == DistroFamily::Debian {
+            "postgresql"
+        } else {
+            "postgresql-server"
+        };
+        crate::common::remove_pkg(ctx, pkg, purge).await;
+        report.applied.push(Change::command("remove postgresql"));
+        if purge {
+            // Data directory differs by distro; remove the common locations.
+            let _ = ctx
+                .runner()
+                .run("rm", &["-rf", "/var/lib/postgresql", "/var/lib/pgsql"])
+                .await;
+            report
+                .applied
+                .push(Change::command("purge postgresql data"));
+        }
+        Ok(report)
+    }
 }
 
 async fn self_drift(ctx: &Context) -> Vec<String> {
