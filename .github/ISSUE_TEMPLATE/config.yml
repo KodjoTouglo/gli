@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/KodjoTouglo/hardn/security/advisories/new
+    url: https://github.com/KodjoTouglo/gli/security/advisories/new
     about: Report security issues privately, not as a public issue. See SECURITY.md.
   - name: Question or idea
-    url: https://github.com/KodjoTouglo/hardn/discussions
+    url: https://github.com/KodjoTouglo/gli/discussions
     about: Ask a question or discuss an idea in Discussions.

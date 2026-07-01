@@ -1,12 +1,12 @@
 #!/bin/sh
 # gli installer: downloads the right prebuilt binary from GitHub Releases.
 #
-#   curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/hardn/develop/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/gli/develop/install.sh | sh
 #
 # Override version with VPSGUARD_VERSION, install dir with VPSGUARD_BIN_DIR.
 set -eu
 
-REPO="KodjoTouglo/hardn"
+REPO="KodjoTouglo/gli"
 BIN="gli"
 
 os=$(uname -s)

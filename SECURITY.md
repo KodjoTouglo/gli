@@ -5,7 +5,7 @@
 Please report security issues privately, not as a public issue or pull request.
 
 Open a private advisory at
-https://github.com/KodjoTouglo/hardn/security/advisories/new, or email the
+https://github.com/KodjoTouglo/gli/security/advisories/new, or email the
 maintainer if you cannot use advisories.
 
 Include a description, the affected version, and steps to reproduce. You will
