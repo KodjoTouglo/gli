@@ -9,7 +9,18 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Creates the GitHub Release once (auto-marks -rc/-alpha/-beta as
+      # prerelease) so the parallel upload jobs have a release to attach to.
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    needs: create-release
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
