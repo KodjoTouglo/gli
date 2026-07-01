@@ -11,6 +11,7 @@ mod common;
 mod docker;
 mod fail2ban;
 mod firewall;
+mod monitoring;
 mod postgres;
 mod redis;
 mod ssh;
@@ -24,6 +25,7 @@ pub use caddy::CaddyModule;
 pub use docker::DockerModule;
 pub use fail2ban::Fail2banModule;
 pub use firewall::FirewallModule;
+pub use monitoring::MonitoringModule;
 pub use postgres::PostgresModule;
 pub use redis::RedisModule;
 pub use ssh::SshModule;
@@ -49,5 +51,6 @@ pub fn catalog() -> ModuleCatalog {
         Box::new(PostgresModule),
         Box::new(RedisModule),
         Box::new(AppModule),
+        Box::new(MonitoringModule),
     ])
 }

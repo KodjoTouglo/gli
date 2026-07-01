@@ -69,3 +69,8 @@ runtime = "docker"     # docker | native
 # dir = "/srv/app"
 # domain = "example.com"
 database = "postgres"  # none | postgres | mysql | redis
+
+# Opt-in monitoring agent (disabled by default).
+[monitoring]
+enabled = false
+backend = "netdata"   # netdata | node_exporter
