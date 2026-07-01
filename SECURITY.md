@@ -13,7 +13,7 @@ get an acknowledgement, and we will work on a fix and coordinate disclosure.
 
 ## Scope
 
-vpsguard changes SSH, firewall, users, and other sensitive system state. Issues
+gli changes SSH, firewall, users, and other sensitive system state. Issues
 of particular interest:
 
 - Lockout or rollback failures that could leave a host unreachable.

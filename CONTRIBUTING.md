@@ -1,4 +1,4 @@
-# Contributing to vpsguard
+# Contributing to gli
 
 Thanks for helping. This guide keeps changes consistent and safe.
 
@@ -43,8 +43,8 @@ All three must be clean. CI runs the same checks.
 
 ## Adding a module
 
-1. Add its config to `vpsguard-core` (`config.rs`) and export it.
-2. Implement the module in `vpsguard-modules`, register it in the catalog.
+1. Add its config to `gli-core` (`config.rs`) and export it.
+2. Implement the module in `gli-modules`, register it in the catalog.
 3. Add it to the example config and cover it with tests.
 4. Make it cross-distro via `Platform` (service names, package managers).
 

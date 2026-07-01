@@ -31,8 +31,8 @@ jobs:
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
         with:
-          bin: vpsguard
+          bin: gli
           target: ${{ matrix.target }}
-          archive: vpsguard-$tag-$target
+          archive: gli-$tag-$target
           checksum: sha256
           token: ${{ secrets.GITHUB_TOKEN }}
