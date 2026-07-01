@@ -46,6 +46,15 @@ git clone https://github.com/KodjoTouglo/gli.git && cd gli
 cargo build --release --bin gli
 ```
 
+To remove the `gli` binary:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KodjoTouglo/gli/main/uninstall.sh | sh
+```
+
+To undo what gli configured on a host, run `gli uninstall` (add `--purge` to
+delete data) before removing the binary.
+
 ## Quickstart
 
 ```sh
