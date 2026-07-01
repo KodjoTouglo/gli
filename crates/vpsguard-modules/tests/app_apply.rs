@@ -101,21 +101,75 @@ async fn disabled_is_not_applicable() {
 }
 
 #[tokio::test]
-async fn missing_repo_is_not_applicable() {
+async fn no_repo_django_errors_on_apply() {
     let tmp = tempfile::tempdir().unwrap();
     let cfg = Config {
         app: AppConfig {
             enabled: true,
             repo: None,
+            dir: Some("/srv/app".into()),
             ..AppConfig::default()
         },
         ..Config::default()
     };
     let (ctx, _) = ctx(tmp.path(), cfg);
-    assert_eq!(
-        AppModule.check(&ctx).await.unwrap().state,
-        State::NotApplicable
-    );
+    let err = AppModule.apply(&ctx, false).await.unwrap_err();
+    assert!(err.to_string().contains("no app.repo set"));
+}
+
+#[tokio::test]
+async fn wordpress_without_repo_generates_compose_stack() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cfg = Config {
+        app: AppConfig {
+            enabled: true,
+            framework: Framework::Wordpress,
+            runtime: AppRuntime::Docker,
+            repo: None,
+            dir: Some("/srv/app".into()),
+            ..AppConfig::default()
+        },
+        ..Config::default()
+    };
+    let (ctx, runner) = ctx(tmp.path(), cfg);
+
+    let report = AppModule.apply(&ctx, false).await.unwrap();
+    assert!(!report.is_noop());
+
+    let compose = tmp.path().join("srv/app/compose.yaml");
+    let body = tokio::fs::read_to_string(&compose).await.unwrap();
+    assert!(body.contains("wordpress:latest"));
+    assert!(body.contains("mariadb"));
+
+    let calls = runner.calls.lock().unwrap().clone();
+    assert!(calls
+        .iter()
+        .any(|c| c.contains("compose") && c.contains("up -d")));
+    assert!(calls.iter().all(|c| !c.contains("git clone")));
+}
+
+#[tokio::test]
+async fn native_static_is_served_by_caddy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cfg = Config {
+        app: AppConfig {
+            enabled: true,
+            framework: Framework::Static,
+            runtime: AppRuntime::Native,
+            repo: Some("https://example.com/me/site.git".into()),
+            dir: Some("/srv/app".into()),
+            ..AppConfig::default()
+        },
+        ..Config::default()
+    };
+    let (ctx, runner) = ctx(tmp.path(), cfg);
+
+    let report = AppModule.apply(&ctx, false).await.unwrap();
+    assert!(!report.is_noop());
+    let calls = runner.calls.lock().unwrap().clone();
+    assert!(calls.iter().any(|c| c.starts_with("git clone")));
+    // No compose for a static native site.
+    assert!(calls.iter().all(|c| !c.contains("compose")));
 }
 
 #[tokio::test]

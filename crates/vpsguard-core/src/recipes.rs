@@ -38,6 +38,20 @@ allow = []
 enabled = true
 "#;
 
+const WORDPRESS: &str = r#"
+profile = "balanced"
+
+[firewall]
+allow = ["80/tcp", "443/tcp"]
+
+[docker]
+enabled = true
+
+[app]
+enabled = true
+framework = "wordpress"
+"#;
+
 const BUILTINS: &[Recipe] = &[
     Recipe {
         name: "baseline",
@@ -53,6 +67,11 @@ const BUILTINS: &[Recipe] = &[
         name: "docker-host",
         description: "Baseline plus Docker installed and enabled",
         preset: DOCKER_HOST,
+    },
+    Recipe {
+        name: "wordpress",
+        description: "Baseline plus a Docker WordPress + MariaDB stack (set app.domain for HTTPS)",
+        preset: WORDPRESS,
     },
 ];
 
